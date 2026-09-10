@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -161,8 +162,10 @@ public class OrderServiceImpl implements OrderService {
         order.setReceiverPhone(receiverPhone);
         order.setReceiverAddress(receiverAddress);
         order.setCreateTime(now);
-        // 超时未支付订单由定时任务自动取消，过期时间按配置向后计算
-        order.setExpireTime(now.plusMinutes(orderExpireMinutes));
+        // 超时未支付订单由延迟消息自动取消，过期时间按配置向后计算；
+        // 必须按秒截断，否则 MySQL DATETIME 四舍五入进位会让延迟消息比存的过期时间早约 1 秒到达，
+        // 导致 closeExpiredOrder 的 expire_time <= now 条件误判“未到期”
+        order.setExpireTime(now.plusMinutes(orderExpireMinutes).truncatedTo(ChronoUnit.SECONDS));
         order.setUpdateTime(now);
         orderMapper.insert(order);
         return order;
