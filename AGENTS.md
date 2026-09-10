@@ -23,6 +23,7 @@ The Git root is this directory. The project is branded 墨枢 InkNexus, but the 
 - `docker-compose.infra.yml`: local MySQL, Nacos, Redis, and RabbitMQ for macOS / Docker Desktop.
 - `docker-compose.nginx.yml`: builds `front/` via its Dockerfile and serves the SPA through nginx on port 80; see `说明文档/BookMall-Nginx部署说明.md`. Note `front/package.json`'s `build:docker` uses Windows `copy` — on macOS run `npm run build` instead.
 - `scripts/dev-macos.sh`: optional macOS bootstrap for infra + Nacos config publishing.
+- `benchmark/`: JMeter plans (`book-list.jmx` cache cold/warm comparison, `order-create.jmx` write path) driven by `-J` properties; fill results into `说明文档/BookMall-压测报告.md`.
 - `说明文档/`: detailed module and deployment docs.
 
 ## Build, Test, and Development Commands
