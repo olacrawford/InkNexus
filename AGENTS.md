@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-The Git root is this directory.
+The Git root is this directory. The project is branded 墨枢 InkNexus, but the engineering name stays BookMall: Maven modules, Java packages (`com.bookmall`), SQL, and frontend storage keys keep the `bookmall` naming — do not rename them wholesale.
 
 - `BookMall/`: Spring Cloud Alibaba backend:
   - `bookmall-common`: shared `Result`, `PageResult`, errors, and exceptions.
@@ -16,11 +16,12 @@ The Git root is this directory.
   - `bookmall-ai` (8071): read-only chatbot using LangChain4j + DashScope (Qwen); session memory in Redis; calls book/order via OpenFeign.
   - Async flow via RabbitMQ: `bookmall-payment` publishes pay-success events; `bookmall-order` consumes them to mark orders paid; `bookmall-order` and `bookmall-stock` exchange stock confirm/release events. Producers/consumers live in each module's `mq` package.
 - REST APIs are documented with Knife4j (springdoc) in each service.
-- `front/`: Vue 3 + Vite app under `front/src/` — axios wrapper and endpoints in `src/api/` (`http.js`, `bookmall.js`), views in `src/views/` (Home, Books, Cart, Orders, Address, Login, AiChat).
+- `front/`: Vue 3 + Vite app under `front/src/` — axios wrapper and endpoints in `src/api/` (`http.js`, `bookmall.js`, `result.js` for unwrapping `Result`), session helpers in `src/utils/`, views in `src/views/` (Home, Books, Cart, Orders, Address, Login, AiChat).
 - `sql/sql.txt`: complete MySQL schema and seed data, including all 9 tables.
 - `sql/updates/`: numbered incremental SQL scripts (`001_*.sql` …) for existing environments.
 - `nacos-config/`: per-service config and `publish.sh`.
 - `docker-compose.infra.yml`: local MySQL, Nacos, Redis, and RabbitMQ for macOS / Docker Desktop.
+- `docker-compose.nginx.yml`: builds `front/` via its Dockerfile and serves the SPA through nginx on port 80; see `说明文档/BookMall-Nginx部署说明.md`. Note `front/package.json`'s `build:docker` uses Windows `copy` — on macOS run `npm run build` instead.
 - `scripts/dev-macos.sh`: optional macOS bootstrap for infra + Nacos config publishing.
 - `说明文档/`: detailed module and deployment docs.
 
