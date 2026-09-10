@@ -36,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -189,8 +190,9 @@ class OrderServiceImplTest {
         OrderDetailVO detail = orderService.createOrder(1L, buildCreateRequest("req-1"));
 
         assertEquals(100L, detail.getId());
-        // 重复请求本次预占的库存必须补偿释放，且不再创建新订单
+        // 重复请求本次预占的库存必须补偿释放，且不再创建新订单、不发关单消息
         verify(orderEventPublisher).publishStockRelease(isNull(), isNull(), anyList());
+        verify(orderEventPublisher, never()).publishOrderCloseDelay(any());
     }
 
     @Test
@@ -206,7 +208,12 @@ class OrderServiceImplTest {
 
         when(bookClient.getBookById(5L)).thenReturn(Result.success(book));
         when(stockClient.deduct(any(StockOperationRequest.class))).thenReturn(Result.success());
-        when(orderMapper.insert(any(Order.class))).thenReturn(1);
+        // 模拟 MyBatis-Plus 插入后回填自增主键
+        when(orderMapper.insert(any(Order.class))).thenAnswer(invocation -> {
+            Order inserting = invocation.getArgument(0);
+            inserting.setId(100L);
+            return 1;
+        });
         when(orderMapper.selectById(any())).thenReturn(created);
         when(orderItemMapper.selectList(any())).thenReturn(List.of());
 
@@ -216,6 +223,8 @@ class OrderServiceImplTest {
         ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
         verify(orderMapper).insert(captor.capture());
         assertEquals("req-1", captor.getValue().getClientRequestId());
+        // 下单成功后应发布超时关单延迟消息
+        verify(orderEventPublisher).publishOrderCloseDelay(100L);
     }
 
     private OrderCreateRequest buildCreateRequest(String clientRequestId) {

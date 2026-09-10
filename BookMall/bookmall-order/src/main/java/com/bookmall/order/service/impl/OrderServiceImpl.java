@@ -87,6 +87,7 @@ public class OrderServiceImpl implements OrderService {
             Order order = insertOrderHead(userId, request.getClientRequestId(), totalAmount,
                     request.getReceiverName(), request.getReceiverPhone(), request.getReceiverAddress());
             insertOrderItem(order, book, request.getQuantity());
+            publishCloseDelay(order.getId());
             return getOrderDetail(order.getId(), userId);
         } catch (DuplicateKeyException ex) {
             // 幂等命中：同一用户同一请求号已下过单，补偿释放本次预占并返回已有订单
@@ -132,6 +133,7 @@ public class OrderServiceImpl implements OrderService {
             for (int i = 0; i < books.size(); i++) {
                 insertOrderItem(order, books.get(i), quantities.get(i));
             }
+            publishCloseDelay(order.getId());
             return getOrderDetail(order.getId(), userId);
         } catch (DuplicateKeyException ex) {
             // 幂等命中：同一用户同一请求号已下过单，补偿释放本次预占并返回已有订单
@@ -221,6 +223,15 @@ public class OrderServiceImpl implements OrderService {
         } catch (Exception ex) {
             // 补偿释放只记录日志，不掩盖原始的订单异常
             log.warn("订单创建失败后释放库存异常", ex);
+        }
+    }
+
+    private void publishCloseDelay(Long orderId) {
+        try {
+            orderEventPublisher.publishOrderCloseDelay(orderId);
+        } catch (Exception ex) {
+            // 延迟关单消息发送失败不阻断下单，兜底扫描任务会关闭漏网订单
+            log.warn("发布订单关单延迟消息失败：orderId={}", orderId, ex);
         }
     }
 

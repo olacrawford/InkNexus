@@ -19,4 +19,10 @@ public final class BookMallRabbitMq {
     public static final String ORDER_STOCK_RELEASE_QUEUE = "bookmall.stock.order.release.queue";
     public static final String ORDER_PAID_ROUTING_KEY = "order.paid";
     public static final String ORDER_STOCK_RELEASE_ROUTING_KEY = "order.stock.release";
+
+    // 订单超时关单延迟消息：order 下单时发往延迟队列，TTL 过期后经死信交换机进入关单队列，order 自行消费
+    public static final String ORDER_CLOSE_EXCHANGE = "bookmall.order.close.exchange";
+    public static final String ORDER_CLOSE_DELAY_QUEUE = "bookmall.order.close.delay.queue";
+    public static final String ORDER_CLOSE_QUEUE = "bookmall.order.close.queue";
+    public static final String ORDER_CLOSE_ROUTING_KEY = "order.close";
 }

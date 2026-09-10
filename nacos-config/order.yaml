@@ -20,5 +20,6 @@ spring:
 bookmall:
   order:
     expire-minutes: 30
-    close-cron: "0/30 * * * * ?"
+    # 超时关单主链路是 RabbitMQ 延迟消息（TTL+死信），此 cron 只是兜底扫描周期
+    close-cron: "0 */2 * * * ?"
     close-batch-size: 500

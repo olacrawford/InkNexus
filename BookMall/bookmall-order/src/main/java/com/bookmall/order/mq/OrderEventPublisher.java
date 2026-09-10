@@ -1,6 +1,7 @@
 package com.bookmall.order.mq;
 
 import com.bookmall.common.mq.BookMallRabbitMq;
+import com.bookmall.common.mq.OrderCloseDelayMessage;
 import com.bookmall.common.mq.OrderStockEvent;
 import com.bookmall.common.mq.StockItemMessage;
 import com.bookmall.order.client.dto.StockOperationItem;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 发布订单支付/释放库存事件，库存服务订阅后异步处理。
+ * 发布订单支付/释放库存事件与超时关单延迟消息，库存服务和订单自身订阅处理。
  */
 @Component
 public class OrderEventPublisher {
@@ -32,6 +33,16 @@ public class OrderEventPublisher {
     public void publishStockRelease(Long orderId, Long userId, List<StockOperationItem> stockItems) throws Exception {
         publish(OrderStockEvent.OPERATION_ORDER_RELEASE, orderId, userId, stockItems,
                 BookMallRabbitMq.ORDER_STOCK_RELEASE_ROUTING_KEY);
+    }
+
+    /**
+     * 发布超时关单延迟消息：直接投递到延迟队列，TTL 过期后死信进入关单队列。
+     */
+    public void publishOrderCloseDelay(Long orderId) throws Exception {
+        OrderCloseDelayMessage message = new OrderCloseDelayMessage();
+        message.setOrderId(orderId);
+        rabbitTemplate.convertAndSend("", BookMallRabbitMq.ORDER_CLOSE_DELAY_QUEUE,
+                objectMapper.writeValueAsString(message));
     }
 
     private void publish(String operation, Long orderId, Long userId,

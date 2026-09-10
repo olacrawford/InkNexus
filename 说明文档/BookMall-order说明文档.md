@@ -10,9 +10,10 @@
 - 通过 OpenFeign 调用图书服务，快照图书标题、价格
 - 通过 OpenFeign 读取购物车已选条目，一次创建多条订单明细
 - 下单前通过 `StockClient` 预占库存，本地落库失败时补偿释放
+- 基于 `(user_id, client_request_id)` 唯一索引实现下单幂等，重复提交返回同一笔订单
 - 通过 RabbitMQ 消费支付成功事件，把订单更新为已支付
 - 订单支付成功后再通过 RabbitMQ 发布订单支付事件，库存服务确认库存
-- 通过定时任务关闭超时未支付订单，并释放预占库存
+- 超时关单主链路走 RabbitMQ 延迟消息（TTL+死信队列），定时任务只做兜底扫描
 - 取消订单和超时关单时发布库存释放事件，库存服务异步释放预占库存
 - 创建订单主表和订单明细
 - 查询当前用户订单列表
@@ -122,17 +123,23 @@
 
 确认收货，只允许当前用户把已支付订单更新为已完成；已完成订单重复调用按成功处理。
 
-### 4.9 定时任务：关闭超时订单
+### 4.9 超时关单：延迟消息为主，定时扫描兜底
 
-`OrderTimeoutTask` 每 30 秒扫描一次，只关闭已超过 `expire_time` 且仍为待支付的订单，每轮最多处理 `close-batch-size` 条；关闭成功后会释放该订单预占的库存。库存释放失败时订单状态回滚，下一轮任务会重试。
+**主链路（RabbitMQ 延迟消息）**：订单创建成功后向延迟队列 `bookmall.order.close.delay.queue` 发布关单消息，队列级 TTL 等于 `expire-minutes`，消息到期后经死信交换机 `bookmall.order.close.exchange` 进入关单队列 `bookmall.order.close.queue`；`OrderCloseDelayConsumer` 消费后调用 `closeExpiredOrder` 关单并释放库存。因为所有订单的过期时间统一为 `expire-minutes`，采用队列级 TTL 而非按消息 TTL，规避了单队列内按消息 TTL 的队头阻塞问题。
+
+**兜底（定时扫描）**：`OrderTimeoutTask` 按 `bookmall.order.close-cron`（默认每 2 分钟）扫描关闭延迟消息未覆盖的超时订单（消息发送失败、RabbitMQ 不可用期间漏网的订单），每轮最多处理 `close-batch-size` 条。
+
+`closeExpiredOrder` 按状态条件更新（仅 `status=0` 且已过期才关闭），天然幂等：已支付、已取消或未到期的订单收到关单消息时直接跳过；库存释放失败时订单状态回滚，下一轮兜底任务会重试。
 
 存量环境升级后会为历史订单补齐 `expire_time`，因此很久以前创建的待支付订单可能在下一次扫描时被自动取消；如果历史订单没有锁定库存，释放操作会按“已释放”处理，不会卡住任务。
+
+注意：RabbitMQ 队列参数一经声明不可更改，调整 `expire-minutes` 后需删除 `bookmall.order.close.delay.queue` 让服务重新声明。
 
 ## 5. 数据模型
 
 `Order` 映射 `t_order`：
 
-- `orderNo`、`userId`、`totalAmount`
+- `orderNo`、`clientRequestId`、`userId`、`totalAmount`
 - `status`（0 待支付，1 已支付，2 已取消，3 已完成）
 - `receiverName`、`receiverPhone`、`receiverAddress`
 - `createTime`、`expireTime`、`updateTime`
