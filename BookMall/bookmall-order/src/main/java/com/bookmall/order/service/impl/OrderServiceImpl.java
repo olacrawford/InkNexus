@@ -23,6 +23,7 @@ import com.bookmall.order.vo.OrderDetailVO;
 import com.bookmall.order.vo.OrderVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,10 +84,13 @@ public class OrderServiceImpl implements OrderService {
         reserveStock(stockItems);
         try {
             BigDecimal totalAmount = book.getPrice().multiply(BigDecimal.valueOf(request.getQuantity()));
-            Order order = insertOrderHead(userId, totalAmount,
+            Order order = insertOrderHead(userId, request.getClientRequestId(), totalAmount,
                     request.getReceiverName(), request.getReceiverPhone(), request.getReceiverAddress());
             insertOrderItem(order, book, request.getQuantity());
             return getOrderDetail(order.getId(), userId);
+        } catch (DuplicateKeyException ex) {
+            // 幂等命中：同一用户同一请求号已下过单，补偿释放本次预占并返回已有订单
+            return returnExistingOrder(userId, request.getClientRequestId(), stockItems, ex);
         } catch (Exception ex) {
             // 本地订单落库异常时补偿释放，避免库存被长期占用
             releaseStockQuietly(stockItems);
@@ -123,12 +127,15 @@ public class OrderServiceImpl implements OrderService {
         // 一次预占所有商品，库存服务内部会整体回滚
         reserveStock(stockItems);
         try {
-            Order order = insertOrderHead(userId, totalAmount,
+            Order order = insertOrderHead(userId, request.getClientRequestId(), totalAmount,
                     request.getReceiverName(), request.getReceiverPhone(), request.getReceiverAddress());
             for (int i = 0; i < books.size(); i++) {
                 insertOrderItem(order, books.get(i), quantities.get(i));
             }
             return getOrderDetail(order.getId(), userId);
+        } catch (DuplicateKeyException ex) {
+            // 幂等命中：同一用户同一请求号已下过单，补偿释放本次预占并返回已有订单
+            return returnExistingOrder(userId, request.getClientRequestId(), stockItems, ex);
         } catch (RuntimeException ex) {
             // 本地订单落库异常时补偿释放，避免库存被长期占用
             releaseStockQuietly(stockItems);
@@ -136,7 +143,7 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private Order insertOrderHead(Long userId, BigDecimal totalAmount,
+    private Order insertOrderHead(Long userId, String clientRequestId, BigDecimal totalAmount,
                                   String receiverName, String receiverPhone, String receiverAddress) {
         // 订单号：OD + 时间戳 + UUID 前6位，保证唯一
         String orderNo = "OD" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 6);
@@ -144,6 +151,7 @@ public class OrderServiceImpl implements OrderService {
 
         Order order = new Order();
         order.setOrderNo(orderNo);
+        order.setClientRequestId(clientRequestId);
         order.setUserId(userId);
         order.setTotalAmount(totalAmount);
         order.setStatus(0); // 0 待支付
@@ -156,6 +164,26 @@ public class OrderServiceImpl implements OrderService {
         order.setUpdateTime(now);
         orderMapper.insert(order);
         return order;
+    }
+
+    /**
+     * 下单幂等兜底：唯一键冲突说明同一用户已用相同请求号下过单，
+     * 释放本次重复预占的库存后返回已有订单，保证重复提交无副作用。
+     */
+    private OrderDetailVO returnExistingOrder(Long userId, String clientRequestId,
+                                              List<StockOperationItem> stockItems,
+                                              DuplicateKeyException original) {
+        releaseStockQuietly(stockItems);
+        Order existing = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
+                .eq(Order::getUserId, userId)
+                .eq(Order::getClientRequestId, clientRequestId)
+                .last("LIMIT 1"));
+        if (existing == null) {
+            // 查不到说明冲突不是幂等键导致的，按原异常处理
+            throw original;
+        }
+        log.info("下单幂等命中，返回已有订单：orderId={}, clientRequestId={}", existing.getId(), clientRequestId);
+        return getOrderDetail(existing.getId(), userId);
     }
 
     private void insertOrderItem(Order order, BookSnapshot book, Integer quantity) {

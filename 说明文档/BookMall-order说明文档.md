@@ -78,9 +78,12 @@
   "quantity": 2,
   "receiverName": "张三",
   "receiverPhone": "13800000000",
-  "receiverAddress": "上海市 浦东新区 测试路 1 号"
+  "receiverAddress": "上海市 浦东新区 测试路 1 号",
+  "clientRequestId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+`clientRequestId` 可选（最长 64 位）。传入后以 `(user_id, client_request_id)` 唯一索引做下单幂等：同一用户重复提交返回同一笔订单，并自动补偿释放重复预占的库存；不传则行为与旧版完全一致。
 
 ### 4.3 POST /orders/from-cart
 
@@ -92,9 +95,12 @@
 {
   "receiverName": "张三",
   "receiverPhone": "13800000000",
-  "receiverAddress": "上海市 浦东新区 测试路 1 号"
+  "receiverAddress": "上海市 浦东新区 测试路 1 号",
+  "clientRequestId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+`clientRequestId` 含义与 `POST /orders` 相同。
 
 ### 4.4 GET /orders
 

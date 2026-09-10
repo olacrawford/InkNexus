@@ -1,6 +1,13 @@
 import http from './http'
 import { unwrapResult } from './result'
 
+// 下单幂等请求号：每次发起下单前生成一次，重试/超时重发时复用同一个值
+export function newRequestId() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 export const authApi = {
   login(payload) {
     return http.post('/api/auth/login', payload).then(unwrapResult)

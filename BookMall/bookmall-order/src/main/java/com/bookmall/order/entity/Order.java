@@ -12,6 +12,7 @@ public class Order {
 
     private Long id;
     private String orderNo;
+    private String clientRequestId;
     private Long userId;
     private BigDecimal totalAmount;
     private Integer status;

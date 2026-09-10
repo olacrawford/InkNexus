@@ -94,6 +94,7 @@ DROP TABLE IF EXISTS t_order;
 CREATE TABLE t_order (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
     order_no VARCHAR(64) NOT NULL COMMENT '订单号',
+    client_request_id VARCHAR(64) DEFAULT NULL COMMENT '客户端请求号，下单幂等防重',
     user_id BIGINT NOT NULL COMMENT '用户ID',
     total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '订单总金额',
     status TINYINT NOT NULL DEFAULT 0 COMMENT '订单状态：0待支付 1已支付 2已取消 3已完成',
@@ -104,6 +105,7 @@ CREATE TABLE t_order (
     expire_time DATETIME NOT NULL COMMENT '订单过期时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     UNIQUE KEY uk_order_no (order_no),
+    UNIQUE KEY uk_user_request (user_id, client_request_id),
     KEY idx_user_id_create_time (user_id, create_time),
     KEY idx_status_expire_time (status, expire_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单主表';

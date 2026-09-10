@@ -3,6 +3,7 @@ package com.bookmall.order.dto;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
@@ -23,5 +24,11 @@ public class OrderCreateRequest {
 
     @NotBlank(message = "收货地址不能为空")
     private String receiverAddress;
+
+    /**
+     * 客户端请求号，可选。传入后同一用户重复提交返回同一笔订单（下单幂等）。
+     */
+    @Size(max = 64, message = "客户端请求号最长64位")
+    private String clientRequestId;
 
 }

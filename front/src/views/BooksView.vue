@@ -97,7 +97,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { addressApi, bookApi, cartApi, orderApi, stockApi } from '../api/bookmall'
+import { addressApi, bookApi, cartApi, newRequestId, orderApi, stockApi } from '../api/bookmall'
 import { getCurrentUser } from '../utils/session'
 
 const books = ref([])
@@ -114,6 +114,8 @@ const selectedCategoryId = ref(null)
 const addresses = ref([])
 const selectedAddressId = ref(null)
 const buyingBook = ref(null)
+// 幂等请求号：每次打开下单弹窗生成，同一弹窗内重试复用，防止重复提交产生多笔订单
+const orderRequestId = ref('')
 const orderForm = reactive({ quantity: 1, receiverName: '', receiverPhone: '', receiverAddress: '' })
 const stocksById = ref({})
 
@@ -226,6 +228,7 @@ function openBuy(book) {
   orderForm.receiverPhone = ''
   orderForm.receiverAddress = ''
   selectedAddressId.value = null
+  orderRequestId.value = newRequestId()
   error.value = ''
   loadAddresses()
 }
@@ -267,6 +270,7 @@ async function submitOrder() {
     await orderApi.create({
       bookId: buyingBook.value.id,
       quantity: orderForm.quantity,
+      clientRequestId: orderRequestId.value,
       receiverName: orderForm.receiverName,
       receiverPhone: orderForm.receiverPhone,
       receiverAddress: orderForm.receiverAddress

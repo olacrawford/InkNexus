@@ -102,7 +102,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { addressApi, bookApi, cartApi, orderApi, stockApi } from '../api/bookmall'
+import { addressApi, bookApi, cartApi, newRequestId, orderApi, stockApi } from '../api/bookmall'
 import { getCurrentUser } from '../utils/session'
 
 const cartItems = ref([])
@@ -113,6 +113,8 @@ const notice = ref('')
 const loading = ref(false)
 const checkoutOpen = ref(false)
 const checkoutSubmitting = ref(false)
+// 幂等请求号：每次打开结算弹窗生成，同一弹窗内重试复用，防止重复提交产生多笔订单
+const checkoutRequestId = ref('')
 const addresses = ref([])
 const selectedAddressId = ref(null)
 const checkoutForm = reactive({ receiverName: '', receiverPhone: '', receiverAddress: '' })
@@ -300,6 +302,7 @@ function openCheckout() {
   checkoutForm.receiverName = ''
   checkoutForm.receiverPhone = ''
   checkoutForm.receiverAddress = ''
+  checkoutRequestId.value = newRequestId()
   checkoutOpen.value = true
   loadAddresses()
 }
@@ -330,6 +333,7 @@ async function submitCheckout() {
   try {
     const selectedIds = selectedItems.value.map((item) => item.id)
     await orderApi.createFromCart({
+      clientRequestId: checkoutRequestId.value,
       receiverName: checkoutForm.receiverName,
       receiverPhone: checkoutForm.receiverPhone,
       receiverAddress: checkoutForm.receiverAddress
