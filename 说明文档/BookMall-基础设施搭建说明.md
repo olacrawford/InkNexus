@@ -1,4 +1,4 @@
-# BookMall 基础设施搭建说明
+# 墨枢 InkNexus · 基础设施搭建说明
 
 ## 1. 当前开发环境
 
@@ -157,25 +157,7 @@ docker compose -f docker-compose.infra.yml up -d rabbitmq
 
 ## 4. 启动顺序
 
-后端服务建议按以下顺序启动：
-
-1. `bookmall-auth`（8060）
-2. `bookmall-book`（8070）
-3. `bookmall-cart`（8083）
-4. `bookmall-stock`（8090）
-5. `bookmall-order`（8050）
-6. `bookmall-payment`（8051）
-7. `bookmall-gateway`（8080）
-8. `bookmall-ai`（8071，可最后启动，与主链路解耦）
-
-常用 Maven 命令：
-
-```text
-mvn -f BookMall/pom.xml -DskipTests install
-mvn -f BookMall/pom.xml -pl bookmall-auth spring-boot:run
-```
-
-先执行 `install` 安装公共模块，再把 `bookmall-auth` 替换为其他模块名即可启动对应服务。不要对 `spring-boot:run` 使用 `-am`，否则会尝试在父工程上找启动类。
+后端服务的启动顺序、常用命令与常见问题（Sentinel 日志目录、`DASHSCOPE_API_KEY` 等）统一维护在根 [README.md](../README.md#5-启动后端服务)「本地运行说明」，此处不再重复。要点：auth → book → cart → stock → order → payment → gateway，`bookmall-ai` 与主链路解耦可最后启动。
 
 ## 5. 当前状态
 

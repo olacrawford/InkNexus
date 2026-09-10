@@ -1,4 +1,4 @@
-# BookMall Nginx 部署说明
+# 墨枢 InkNexus · Nginx 部署说明
 
 ## 1. 本次实现了什么
 

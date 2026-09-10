@@ -1,4 +1,4 @@
-# BookMall 说明文档
+# 墨枢 InkNexus（BookMall）说明文档
 
 > 本文档目录按模块与横向能力组织，随项目进度同步更新。所有文档均为「当前已实现」口径。
 
@@ -24,12 +24,21 @@
 | [BookMall-增强项实施说明.md](BookMall-增强项实施说明.md) | Redis 缓存、Sentinel、MQ 最终一致性、单元测试、AI 助手横向能力 |
 | [BookMall-Nginx部署说明.md](BookMall-Nginx部署说明.md) | Nginx 反向代理与前端部署 |
 
-## 三、相关设计文档
+## 三、演进规划
+
+| 文档 | 说明 |
+| --- | --- |
+| [BookMall-改进方案.md](BookMall-改进方案.md) | P0~P3 演进路线：安全、可靠性、工程化、可观测性与功能增强（规划口径） |
+
+## 四、相关设计文档
 
 - 后端根说明：[../README.md](../README.md)
-- AI 模块技术设计：[../BookMall/ai-assistant-技术设计文档.md](../BookMall/ai-assistant-技术设计文档.md)
 
-## 四、更新约定
+## 五、归档
+
+历史文档见 [archive/README.md](archive/README.md)（AI 模块施工文档、旧版后端工程 README），仅作留存，不随代码更新。
+
+## 五、更新约定
 
 - 文档随代码、配置同步更新，单个改动尽量包含后端、前端、SQL、Nacos 配置与本文档。
 - 新增服务请在「模块说明」表补一行，并在「基础设施」补充端口、Nacos 配置与启动顺序。

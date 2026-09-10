@@ -3,7 +3,7 @@
     <section class="hero-panel">
       <div>
         <p class="eyebrow">Platform Overview</p>
-        <h3>BookMall 微服务业务总览</h3>
+        <h3>墨枢微服务业务总览</h3>
         <p class="muted hero-copy">
           当前前端已经对接网关入口，围绕认证、图书、购物车、收货地址、订单等核心服务组织页面结构。
           这里更像一个已经上线的业务控制台，而不只是接口调试页。

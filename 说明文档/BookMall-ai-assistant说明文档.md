@@ -1,4 +1,4 @@
-# BookMall ai-assistant 模块说明文档
+# 墨枢 InkNexus · ai-assistant 模块说明文档
 
 ## 1. 当前职责
 
@@ -147,4 +147,4 @@ mvn -f BookMall/pom.xml -pl bookmall-ai spring-boot:run
 > 说明：`/ai/chat` 会真实调用通义千问（DashScope），必须有有效的 `DASHSCOPE_API_KEY` 才能返回模型回复；Key 留空时建议仍可启动并返回健康检查，但对话会因模型鉴权失败而报错。当前未内置 Mock 模型，若希望调试不消耗额度，可在 `config/AiModelConfig` 临时换成返回固定文案的替身模型（属于可选增强，尚未实现）。
 
 ---
-*模块设计见 `BookMall/ai-assistant-技术设计文档.md`。*
+*历史设计（施工文档）已归档至 `archive/ai-assistant-技术设计文档.md`，本文档为当前实现口径。*

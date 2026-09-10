@@ -2,9 +2,9 @@
   <div :class="['app-shell', { 'auth-mode': isAuthPage }]">
     <aside v-if="!isAuthPage" class="sidebar">
       <div class="brand">
-        <span class="brand-mark">B</span>
+        <span class="brand-mark">墨</span>
         <div>
-          <h1>BookMall</h1>
+          <h1>墨枢 InkNexus</h1>
           <p>微服务电商中台</p>
         </div>
       </div>
@@ -28,7 +28,7 @@
       <header v-if="!isAuthPage" class="topbar">
         <div>
           <p class="eyebrow">Gateway Console</p>
-          <h2>BookMall 微服务前端控制台</h2>
+          <h2>墨枢微服务前端控制台</h2>
         </div>
         <div class="topbar-actions">
           <span v-if="currentUser" class="session-pill">

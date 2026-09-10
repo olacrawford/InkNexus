@@ -1,7 +1,7 @@
 <template>
   <section class="card login-card auth-card">
     <div class="auth-hero">
-      <p class="eyebrow">BookMall</p>
+      <p class="eyebrow">墨枢 InkNexus</p>
       <h3>{{ mode === 'login' ? '欢迎回来' : '创建账号' }}</h3>
       <p class="muted auth-hint">先登录或注册，再浏览图书、下单和管理订单。</p>
     </div>

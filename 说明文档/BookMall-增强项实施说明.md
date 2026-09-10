@@ -1,4 +1,4 @@
-# BookMall 增强项实施说明
+# 墨枢 InkNexus · 增强项实施说明
 
 ## 1. 当前已落地增强项
 
@@ -65,33 +65,15 @@
 
 消息重复消费通过支付订单幂等和库存重复确认判断保证不会重复扣减库存。
 
-## 4.5 AI 只读助手（LangChain4j + DashScope）
-
-### 4.5.1 实现方式
-
-- `config/AiModelConfig` 基于 `dashscope.*` 配置构建 `OpenAiChatModel`，对接阿里云通义千问兼容模式
-- `ai/BookAssistantAiService` 使用 `@AiService` + `@SystemMessage` 声明助手边界与工具清单
-- `tool/QueryBookTool` / `tool/QueryOrderTool` 用 `@Tool` 暴露搜书、找书、分类、查订单、查订单详情
-- `config/ChatMemoryConfig` + `support/RedisChatMemoryStore` 把会话记忆落到 Redis，按「用户 + 会话」隔离
-- `config/FeignAuthConfig` 通过 `RequestInterceptor` 把 `X-User-Id` 透传给订单服务，AI 只读、不写交易库
-
-### 4.5.2 关键点
-
-- 模型参数走 `nacos-config/ai-assistant.yaml`：`dashscope.api-key` 取环境变量 `DASHSCOPE_API_KEY`
-- 会话记忆 TTL 2 小时，工具返回结果最多 5 条，避免上下文过长
-- 前端新增 `front/src/views/AiChatView.vue` 与 `/ai` 路由、`aiApi`
+AI 只读助手（LangChain4j + DashScope）的实现与验证见 [BookMall-ai-assistant说明文档.md](BookMall-ai-assistant说明文档.md)，此处不再重复。
 
 ## 5. 核心服务单元测试
 
-- `bookmall-auth`：登录成功签发 Token、用户不存在、密码错误、注册重名
-- `bookmall-book`：图书列表、详情、分页查询
-- `bookmall-cart`：购物车加购原子更新、图书校验失败
-- `bookmall-gateway`：有效 Token 透传 `X-User-Id`、缺失/无效 Token 返回 401、公开接口放行
-- `bookmall-order`：确认收货幂等、支付幂等、取消/超时释放事件
-- `bookmall-stock`：库存预占失败、释放幂等、确认幂等
-- `bookmall-payment`：支付成功发布事件、MQ 发送失败回滚
-- `bookmall-ai`：`ResultUtils` 解包成功/异常、`ChatServiceImpl` 生成会话 ID 与构造记忆键
-- 测试依赖使用 `spring-boot-starter-test`，可运行 `mvn -pl bookmall-auth,bookmall-book,bookmall-cart,bookmall-gateway,bookmall-order,bookmall-stock,bookmall-payment,bookmall-ai -am test`
+全部 9 个后端模块（auth/book/cart/stock/order/payment/gateway/ai/common 场景见各模块文档「验证与测试」节）均有 JUnit 5 + Mockito 单元测试，不依赖中间件：
+
+```bash
+mvn -f BookMall/pom.xml -q test
+```
 
 ## 6. 验证方式
 

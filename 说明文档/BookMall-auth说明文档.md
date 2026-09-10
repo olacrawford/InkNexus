@@ -1,4 +1,4 @@
-# BookMall Auth 模块说明文档
+# 墨枢 InkNexus · Auth 模块说明文档
 
 ## 1. 项目概述
 
