@@ -22,6 +22,7 @@ The Git root is this directory.
 - `nacos-config/`: per-service config and `publish.sh`.
 - `docker-compose.infra.yml`: local MySQL, Nacos, Redis, and RabbitMQ for macOS / Docker Desktop.
 - `scripts/dev-macos.sh`: optional macOS bootstrap for infra + Nacos config publishing.
+- `benchmark/`: JMeter plans (`book-list.jmx` cache cold/warm comparison, `order-create.jmx` write path) driven by `-J` properties; fill results into `说明文档/BookMall-压测报告.md`.
 - `说明文档/`: detailed module and deployment docs.
 
 ## Build, Test, and Development Commands
