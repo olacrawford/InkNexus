@@ -1,61 +1,39 @@
-# 墨枢 InkNexus · 改进方案（面试冲刺版）
+# 墨枢 InkNexus · 改进方案（简历亮点冲刺版）
 
-> 定位：秋招面试冲刺（3~4 天），只做「小改动、低风险、高面试回报」的增量改进。
-> 原则：**不影响大体项目**——不删改既有接口契约与表结构语义，只新增可空列、新增队列/端点/配置文件；每项独立提交、独立可回滚，任何一项做不完都不影响其余项与现有功能。
-> 范围：仅后端；涉及前端的配合项单独标注，不阻塞后端验收。
-> 日期：2026-09-10。更完整的长期演进规划（Outbox 可靠投递、RAG、容器化、支付沙箱、Grafana 等）本版移除，历史版本见 Git（commit 68325bd），后续轮次再规划。
+> 定位：秋招简历「亮点」冲刺（约 3 天），目标是让简历项目页多出几条有代码、有数字、经得起追问的实心条目。
+> 原则：小改动、低风险、每项独立提交、独立可回滚；不删改既有接口契约与表结构语义，只新增可空列、新增队列/端点/配置。
+> 本版取代此前「面试冲刺版」（已删除）；长期演进规划（Outbox 可靠投递、RAG、秒杀、全栈容器化等）见 Git 历史 commit `68325bd`，本轮不做。
 
-## 一、冲刺总览
+## 一、已有亮点盘点（零开发，直接写上简历）
 
-| 序 | 任务 | 工时 | 面试考点 |
-|---|---|---|---|
-| 1 | JWT 密钥治理 | 0.5 天 | 配置外部化、密钥泄露处置 |
-| 2 | 下单接口幂等 | 0.5 天 | 唯一索引防重、幂等语义 |
-| 3 | 超时关单：轮询 → 延迟消息 | 1 天 | TTL+死信队列、订单闭环 |
-| 4 | AI 助手 SSE 流式输出 | 1 天 | 大模型应用工程化 |
-| 5 | GitHub Actions CI | 0.5 天 | 工程素养、质量门禁 |
-| 6 | Zipkin 链路追踪 | 0.5 天 | 分布式追踪、traceId 贯穿 |
-| 7 | 接口压测与性能数据（机动） | 0.5 天 | 性能量化、缓存收益数字 |
+| 亮点 | 代码位置 | 简历参考话术 |
+|---|---|---|
+| AI 客服 Agent（Function Calling） | `bookmall-ai`：`BookAssistantAiService` + `QueryBookTool`/`QueryOrderTool` + `RedisChatMemoryStore` | 基于 LangChain4j + 通义千问实现电商客服 Agent，通过 Function Calling 查询图书/订单，Redis 维持多轮会话上下文 |
+| 库存三态模型防超卖 | `StockMapper.xml`（条件原子 UPDATE）、`StockServiceImpl`（预占/确认/释放） | 采用「可售/锁定/确认」三态库存模型，条件原子更新防止超卖，释放幂等兜底 |
+| 多层幂等 | `PaymentServiceImpl`（支付单状态）、`PaySuccessConsumer`（订单状态）、`closeExpiredOrder`（条件更新） | 支付、MQ 消费、超时关单三层幂等设计，保证重复请求/消息不产生副作用 |
+| 网关统一鉴权 | `bookmall-gateway` `AuthGlobalFilter` | 网关统一 JWT 鉴权并注入用户身份，下游服务不信任客户端请求头 |
+| 全局异常 + 参数校验 | `bookmall-common` `GlobalExceptionHandler`、DTO `@Valid` | 全局异常处理与统一返回体，DTO 校验前置 |
+| 下单价格快照 | `OrderServiceImpl#createOrder` | 下单即快照价格，规避后续改价影响历史订单 |
+| 单元测试 | 各模块 `src/test`（JUnit 5 + Mockito） | 核心业务全覆盖单元测试，不依赖基础设施可独立运行 |
 
-必做 1~5 合计约 **3.5 天**；6、7 按剩余时间机动。建议顺序：**1 → 2 → 3 → 4 → 5 →（6 / 7）**。
+## 二、冲刺总览
 
-## 二、分项实施
+| 序 | 任务 | 工时 | 新增简历句（产出） | 面试考点 |
+|---|---|---|---|---|
+| 1 | 下单接口幂等 | 0.5 天 | 基于唯一索引实现下单幂等，防止重复提交导致重复预占 | 防重、幂等语义 |
+| 2 | 超时关单：轮询 → 延迟消息 | 1 天 | 基于 RabbitMQ TTL+死信队列实现订单超时自动关闭，辅以定时扫描兜底 | 延迟消息、最终一致 |
+| 3 | AI 助手 SSE 流式输出 | 1 天 | SSE 流式输出优化大模型交互体验（打字机效果） | 大模型工程化、流式协议 |
+| 4 | 接口压测出数字 | 0.5 天 | （数字回填到上面任意一条句尾：压测 QPS 从 X 到 Y） | 性能量化、缓存收益 |
 
-### 2.1 JWT 密钥治理（0.5 天）
+建议顺序：**1 → 2 → 3 → 4**（幂等先行，压测放最后测的是改造后的系统）。
 
-**现状**：`nacos-config/auth.yaml` 与 `gateway.yaml` 各写一份相同明文 secret，且已入 Git 历史——应视为已泄露。
+## 三、分项实施
 
-**实施步骤**：
+### 3.1 下单接口幂等（0.5 天）
 
-1. 两份 yaml 的值改为环境变量占位符（Spring 运行时解析，`publish.sh` 无需改动）：
+**现状**：`OrderCreateRequest` 无客户端请求号，`createOrder` 直接插入，连点两次生成两笔订单、重复预占库存。
 
-```yaml
-jwt:
-  secret: ${JWT_SECRET:}
-  expire-seconds: 86400
-```
-
-2. `bookmall-auth` 的 `JwtUtil`、`bookmall-gateway` 的 `AuthGlobalFilter` 启动时快速失败：
-
-```java
-@PostConstruct
-public void checkSecret() {
-    if (secret == null || secret.length() < 32) {
-        throw new IllegalStateException("JWT_SECRET 未配置或长度不足 32 位");
-    }
-}
-```
-
-3. 轮换密钥：本地 `export JWT_SECRET=<新生成的 64 位随机串>`；`scripts/dev-macos.sh` 与 README 启动说明同步补充。
-
-**影响面**：只改 2 份 yaml 取值方式 + 2 个校验类；签发/鉴权行为与接口完全不变；不配环境变量时服务拒绝启动是预期防护。
-**验收**：仓库与 Nacos 配置中无明文 secret；不设环境变量拒绝启动；登录→网关鉴权链路回归通过。
-
-### 2.2 下单接口幂等（0.5 天）
-
-**现状**：`OrderCreateRequest` 无客户端请求号，`createOrder` 直接插入——连点两次生成两笔订单、重复预占库存。MQ 消费端已有幂等，但用户入口没有。
-
-**实施步骤**：
+**步骤**：
 
 1. 新增 `sql/updates/006_order_request_id.sql`：
 
@@ -65,175 +43,69 @@ ALTER TABLE `t_order`
   ADD UNIQUE KEY `uk_user_request` (`user_id`, `client_request_id`);
 ```
 
-按 `user_id + client_request_id` 联合唯一，不同用户相同请求号互不影响；`client_request_id` 允许 NULL，MySQL 唯一索引不去重 NULL，**存量订单与老请求不受任何影响**。
+可空列 + 联合唯一：不同用户请求号互不影响；MySQL 唯一索引不去重 NULL，存量订单与老请求完全不受影响。
 
 2. `OrderCreateRequest` / `OrderFromCartRequest` 增加可选字段 `clientRequestId`，`insertOrderHead` 透传写入。
-3. 插入订单捕获 `DuplicateKeyException` → 按唯一键查回已存在订单直接返回（幂等语义：重复提交返回同一笔订单）。
-4. **前端配合项**：下单时生成 UUID 传入（一行代码，可转交前端侧）；后端对老请求保持兼容。
+3. 插入订单捕获 `DuplicateKeyException` → 按 `(user_id, clientRequestId)` 查回已存在订单直接返回（幂等语义：重复提交返回同一笔订单）。
+4. 前端配合项：下单时生成 UUID 传入（一行代码）；后端对不传该字段的请求保持完全兼容。
 
-**影响面**：表只加可空列与新索引，不动的列/接口为零；不传 `clientRequestId` 时行为与现在完全一致。
-**验收**：同一 `clientRequestId` 重复调用只产生一笔订单、库存只预占一次并返回同一订单号；不同用户请求号相同互不影响。
+**验收**：同一 `clientRequestId` 重复调用只产生一笔订单、库存只预占一次；不同用户请求号相同互不影响。
 
-### 2.3 订单超时关单：定时轮询 → RabbitMQ 延迟消息（1 天）
+### 3.2 超时关单：轮询 → TTL + 死信延迟消息（1 天）
 
-**现状**：`OrderTimeoutTask` 每 30 秒扫 `status=0 且 expire_time<=now` 的订单，延迟最高 30 秒，且持续空扫。
+**现状**：`OrderTimeoutTask` 每 30 秒扫 `status=0 且 expire_time<=now` 的订单，延迟最高 30 秒且持续空扫。
 
-**设计**：订单超时统一为 30 分钟（`bookmall.order.expire-minutes:30`），用**队列级统一 TTL + 死信**即可，无需每条消息不同 TTL（规避队头阻塞问题）。
+**设计要点**：
 
-**实施步骤**：
+- 本项目订单过期时间统一为 `orderExpireMinutes`（全局配置），因此用**队列级 TTL** 单队列即可，天然规避 RabbitMQ「单队列内按消息 TTL 有队头阻塞」的坑——这一点本身就是面试加分话术。
+- 消费端幂等零成本：`closeExpiredOrder` 是条件更新（`status=0 且已过期` 才置为关闭），重复消费/已支付/已取消订单自动 no-op。
 
-1. `bookmall-common/.../mq/BookMallRabbitMq.java` 增加常量：
+**步骤**：
 
-```java
-// 订单超时关闭：下单时发延迟消息，TTL 到期后死信投递给 order 消费
-public static final String ORDER_DELAY_QUEUE = "bookmall.order.delay.queue";
-public static final String ORDER_CLOSE_EXCHANGE = "bookmall.order.close.exchange";
-public static final String ORDER_CLOSE_QUEUE = "bookmall.order.close.queue";
-public static final String ORDER_CLOSE_ROUTING_KEY = "order.close";
-```
+1. `BookMallRabbitMq` 新增拓扑常量；在声明类中创建：
+   - 延迟队列 `bookmall.order.close.delay.queue`：`x-message-ttl` = 过期分钟数×60000，`x-dead-letter-exchange` = `bookmall.order.close.exchange`（direct，无路由键routing key直接投递）。
+   - 死信队列 `bookmall.order.close.queue` 绑定到该交换机。
+2. 订单创建成功后（`insertOrderHead` 之后）向延迟队列发布 `{orderId}` 关单消息。
+3. 新增 `OrderCloseDelayConsumer` 消费死信队列，调用现有 `orderService.closeExpiredOrder(orderId)`，复用其幂等与库存释放逻辑。
+4. `OrderTimeoutTask` 保留作兜底，cron 放宽到 1~5 分钟。
 
-2. `order` 模块 `RabbitMqConfig` 声明延迟队列（死信指向关闭交换机）与关闭队列：
+**验收**：待支付订单到期后约秒级被延迟消息关闭并释放库存；已支付订单收到关单消息无副作用；轮询兜底仍可清理漏网订单。
 
-```java
-@Bean
-public Queue orderDelayQueue() {
-    return QueueBuilder.durable(BookMallRabbitMq.ORDER_DELAY_QUEUE)
-            .withArgument("x-message-ttl", 30 * 60 * 1000)
-            .withArgument("x-dead-letter-exchange", BookMallRabbitMq.ORDER_CLOSE_EXCHANGE)
-            .withArgument("x-dead-letter-routing-key", BookMallRabbitMq.ORDER_CLOSE_ROUTING_KEY)
-            .build();
-}
+### 3.3 AI 助手 SSE 流式输出（1 天）
 
-@Bean
-public Queue orderCloseQueue() {
-    return QueueBuilder.durable(BookMallRabbitMq.ORDER_CLOSE_QUEUE).build();
-}
-// ORDER_CLOSE_EXCHANGE 声明 + closeQueue 绑定 order.close
-```
+**现状**：`AiModelConfig` 用 `OpenAiChatModel`（DashScope 兼容模式）同步返回整段；链路 `AiAssistantController#chat` → `ChatServiceImpl` → `@AiService` 代理。
 
-3. 下单事务提交后向 `ORDER_DELAY_QUEUE` 直发 `orderId`（发送失败仅告警，兜底任务仍会关单，不影响主流程）。
-4. 新增消费者，直接复用已幂等的关单逻辑：
+**步骤**：
 
-```java
-@RabbitListener(queues = BookMallRabbitMq.ORDER_CLOSE_QUEUE)
-public void onClose(String orderId) {
-    orderService.closeExpiredOrder(Long.valueOf(orderId));
-}
-```
+1. `AiModelConfig` 新增 `OpenAiStreamingChatModel` Bean（同 `baseUrl`/`apiKey`，兼容模式支持流式）。
+2. `BookAssistantAiService` 新增返回 `TokenStream` 的方法（LangChain4j `@AiService` 原生支持，系统提示词、记忆、`@Tool` 工具调用在流式下照常生效）。
+3. `ChatService` 新增 `stream` 方法；Controller 新增 `POST /ai/chat/stream`，返回 `SseEmitter`：`onPartialResponse` 回调中逐段 `send`，`onCompleteResponse` 中 `complete`，异常时记录日志并 `completeWithError`。原 `/ai/chat` 保留作为降级。
+4. 网关（Spring Cloud Gateway 基于 Netty）原生支持流式响应，注意确认响应超时设置大于模型最大耗时。
+5. 前端 `AiChatView.vue`：SSE 的 `EventSource` 不支持 POST，改用 `fetch` + `ReadableStream` 手动解析 SSE 帧，逐字追加渲染打字机效果。
 
-5. `OrderTimeoutTask` **保留为兜底**，cron 由 `0/30 * * * * ?` 放宽到 `0 */5 * * * ?`。
+**验收**：浏览器可见逐字输出；多轮会话记忆仍生效；询问图书/订单时 Function Calling 正常；接口经网关 `/api/ai/chat/stream` 可用。
 
-**影响面**：纯增量（新常量/新队列/新消费者）；现有轮询任务不删除只放宽，MQ 全挂也有兜底关单，主链路零风险。
-**验收**：下单后日志可见延迟消息发出；30 分钟整点关单（误差 < 1 秒）；重复投递/支付与关单并发时不误关已支付订单（`closeExpiredOrder` 现有状态判断已覆盖，补一个并发单测）。
+### 3.4 接口压测与简历数字（0.5 天）
 
-### 2.4 AI 助手 SSE 流式输出（1 天）
+1. JMeter 两个场景：
+   - 图书分页列表：对比「清 Redis 后冷启动」与「命中缓存」的 QPS / P95（对应 `@Cacheable` 30 分钟 TTL 的收益）。
+   - 下单链路：固定测试账号与充足库存，压直接下单接口，记录吞吐与错误率。
+2. 数字回填：README「项目亮点」与简历对应条目句尾（例：「引入 Redis 缓存后列表接口 QPS 从 X 提升到 Y，P95 从 A ms 降至 B ms」）。
+3. 压测报告整理到 `说明文档/BookMall-压测报告.md`（场景、参数、结果表）。
 
-**现状**：`ChatServiceImpl#chat` 同步返回整段回复，长回答需等待全部生成完。
+## 四、顺手可选项（每项 ≤ 半小时，不阻塞主线）
 
-**实施步骤**：
+- **JWT 密钥治理**：`nacos-config/auth.yaml`、`gateway.yaml` 的 secret 改 `${JWT_SECRET:}` 环境变量，`JwtUtil`/`AuthGlobalFilter` 启动时校验长度 ≥ 32 并轮换新密钥（旧密钥已入 Git 历史，视为已泄露）。
+- **Feign 超时**：各服务 `connectTimeout`/`readTimeout` 配置，明确预占接口不重试（幂等先行）。
+- **GitHub Actions CI**：push/PR 自动 `mvn test`，README 挂徽章。
 
-1. `bookmall-ai` 增加 `OpenAiStreamingChatModel`（复用现有 DashScope compatible-mode base-url 与 key），`AiService` 接口改用 `TokenStream`。
-2. 控制器新增流式端点（Servlet 栈，用 `SseEmitter`）：
+## 五、本轮明确不做
 
-```java
-@GetMapping(value = "/api/ai/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-public SseEmitter stream(@RequestHeader("X-User-Id") Long userId, @RequestParam String message) {
-    SseEmitter emitter = new SseEmitter(60_000L);
-    chatService.streamChat(userId, message,
-            delta -> sendSafely(emitter, delta),
-            emitter::complete,
-            emitter::completeWithError);
-    return emitter;
-}
-```
+MQ 可靠投递（publisher confirm / Outbox）、秒杀（Redis+Lua）、多级缓存、链路追踪（Zipkin/SkyWalking）、支付沙箱对接、全栈容器化——留给后续轮次，完整长期规划见 Git 历史 `68325bd`。
 
-3. 网关注意点：Spring Cloud Gateway 是 WebFlux 栈，可直接透传 SSE；确认网关 `response-timeout` 大于流式时长。
-4. Redis 会话记忆写入时机改为完整回复拼装完成后，保持现有 memory 结构不变。
-5. **前端配合项**：`AiChatView` 改用 `@microsoft/fetch-event-source` 逐字渲染，由前端侧排期；后端验收用 `curl -N` 直接观察逐字输出，不阻塞本项。
+## 六、统一验收清单
 
-**影响面**：只新增一个流式端点，原同步端点与前端现有调用完全不动；新端点出问题不影响旧功能。
-**验收**：`curl -N` 调流式端点首字 1~2 秒内出现、逐字输出、连接正常收尾；多轮会话记忆不丢。
-
-### 2.5 GitHub Actions CI（0.5 天）
-
-新增 `.github/workflows/ci.yml`（现有单测为纯 Mockito，无需中间件即可跑；gateway 的 `macos-arm64` profile 仅在 mac 激活，ubuntu 不受影响）：
-
-```yaml
-name: ci
-on:
-  push: { branches: [main] }
-  pull_request:
-
-jobs:
-  backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: '17', cache: maven }
-      - run: mvn -f BookMall/pom.xml -q test
-
-  frontend:
-    runs-on: ubuntu-latest
-    defaults: { run: { working-directory: front } }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20', cache: npm, cache-dependency-path: front/package-lock.json }
-      - run: npm ci
-      - run: npm run build
-```
-
-（frontend job 保留用于守护前端产出，不属于本方案工作范围。）
-
-**影响面**：只新增一个 workflow 文件，不碰任何代码。
-**验收**：PR 自动跑后端测试与前端构建，红灯可阻断合并。
-
-### 2.6 Zipkin 链路追踪（0.5 天）
-
-1. 各业务模块（建议先 order/payment/stock，后铺开）加入：
-
-```xml
-<dependency>io.micrometer:micrometer-tracing-bridge-brave</dependency>
-<dependency>io.zipkin.reporter2:zipkin-reporter-brave</dependency>
-```
-
-2. Nacos 各服务配置（或抽公共 data-id）：
-
-```yaml
-management:
-  tracing:
-    sampling.probability: 1.0        # 演示环境全采样
-  zipkin.tracing.endpoint: http://localhost:9411/api/v2/spans
-logging:
-  pattern:
-    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
-```
-
-3. `docker-compose.infra.yml` 追加 zipkin 服务（`openzipkin/zipkin`，9411）。
-4. Feign 已默认透传 trace 上下文；验证一次「下单→预占」在 Zipkin UI 里的跨服务调用树。
-
-**影响面**：只加依赖与配置；reporter 异步上报，Zipkin 挂掉不影响任何业务请求。
-**验收**：Zipkin 中能看到一次请求贯穿 gateway→order→stock 的完整链路与耗时。
-
-### 2.7 接口压测与性能数据（0.5 天，机动）
-
-**目的**：面试中「缓存开启后接口 P99 从 X ms 降到 Y ms」远比「我用了 Redis」有说服力。
-
-**实施步骤**：
-
-1. JMeter 简单线程组（100 并发 × 60s）：图书分页查询（Redis 缓存开/关对比）、下单链路（观察 Sentinel 流控触发）。
-2. 产出简短压测记录（`说明文档/BookMall-压测记录.md`）：QPS、RT 均值/P99、错误率、缓存开关对比与限流生效截图。
-3. 写清前置条件（种子数据量、预热次数），保证数字可复现。
-
-**影响面**：零代码改动，纯只读压测。
-**验收**：可写进简历的具体性能数字至少 2 组，且可复现。
-
-## 三、风险与注意事项
-
-- **密钥只进环境变量**：`JWT_SECRET`、`DASHSCOPE_API_KEY` 一律不入库；`.env` 加入 `.gitignore`。
-- **Nacos 占位符** `${JWT_SECRET:}` 依赖启动环境注入，`scripts/dev-macos.sh` 与 README 必须同步，否则起不来服务。
-- **延迟消息 TTL 队列**仅适用统一超时时长；未来若支持用户自选超时，需换 RabbitMQ 延迟插件或回归定时任务兜底（本轮兜底任务保留，已覆盖）。
-- **幂等唯一索引与历史数据**：`client_request_id` 允许 NULL（MySQL 唯一索引不去重 NULL），存量订单无需刷数据。
-- **SSE 经网关透传**：网关 response-timeout 必须大于流式时长；Servlet 容器注意异步请求超时配置。
-- 每项落地后按仓库约定同步 `README.md`、`说明文档/`、`sql/`、`nacos-config/` 与 `AGENTS.md`。
+- [ ] `mvn -f BookMall/pom.xml -q test` 全量通过
+- [ ] 登录 → 浏览 → 下单 → 支付 → 超时关单主链路手工回归无回归
+- [ ] README / `说明文档/` / `sql/sql.txt` 与代码同步更新（含压测数字）
+- [ ] 每项独立提交（Conventional Commits，如 `feat(order)`、`feat(ai)`），可单独回滚
