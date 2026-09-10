@@ -2,6 +2,7 @@ package com.bookmall.ai.ai;
 
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 import dev.langchain4j.service.spring.AiService;
@@ -10,12 +11,15 @@ import dev.langchain4j.service.spring.AiService;
  * <p>{@code @AiService} 是 LangChain4j 注解：Spring 会在启动时自动生成一个实现类，
  * 把「系统提示词 + 历史记忆 + @Tool 工具」组装成一次可调用的 AI 对话。
  * <p>整个接口方法就是「用户说一句话，返回模型回复」，模型是否会搜书/查订单全靠 @Tool。
+ * <p>{@code chat} 同步返回完整回复；{@code chatStream} 返回 TokenStream 逐 token 流式输出，
+ * 两者共享同一套提示词、记忆和工具。容器里同时存在 ChatModel 与 StreamingChatModel Bean 时，
+ * LangChain4j 会自动为两种方法绑定对应模型。
  */
 @AiService
 public interface BookAssistantAiService {
 
     // @SystemMessage：每次对话都会带上的“人设 + 能力边界”提示词，约束模型只做只读查询
-    @SystemMessage("""
+    String SYSTEM_PROMPT = """
         你是「书小助」，BookMall 图书商城智能购物助手。你只能读取和查询数据，绝不能修改任何数据，也绝不能代表用户下单、支付、退款、取消订单或修改收货地址——这些操作你一律拒绝，并建议用户到对应页面操作。
 
         你能做、也仅能做：
@@ -31,7 +35,13 @@ public interface BookAssistantAiService {
         - 涉及下单、支付、退款、取消、改地址等操作意图时，说明"我这边只能查询，不能帮您操作"，并引导到对应功能页。
         - 用简洁、友好、口语化的中文回答；推荐图书尽量每条给出书名、价格、作者和一句简介。金额用人民币格式（如 ¥59.00）。
         - 回答尽量控制在 200 字以内，分点清晰，可用列表，不要堆砌复杂格式。
-        """)
+        """;
+
+    @SystemMessage(SYSTEM_PROMPT)
     @UserMessage("{{message}}")
     String chat(@MemoryId String memoryId, @V("message") String message);
+
+    @SystemMessage(SYSTEM_PROMPT)
+    @UserMessage("{{message}}")
+    TokenStream chatStream(@MemoryId String memoryId, @V("message") String message);
 }

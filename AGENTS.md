@@ -13,7 +13,7 @@ The Git root is this directory.
   - `bookmall-order` (8050): direct/cart orders, paid-stock confirmation, timeout close, and OpenFeign calls to book, cart, and stock services.
   - `bookmall-payment` (8051): mock payment records and order paid-state updates via OpenFeign.
   - `bookmall-gateway` (8080): routing, JWT validation, and `X-User-Id`.
-  - `bookmall-ai` (8071): read-only chatbot using LangChain4j + DashScope (Qwen); session memory in Redis; calls book/order via OpenFeign.
+  - `bookmall-ai` (8071): read-only chatbot using LangChain4j + DashScope (Qwen); SSE streaming via `POST /ai/chat/stream` (`TokenStream` + `SseEmitter`, `/ai/chat` is the fallback); session memory in Redis; calls book/order via OpenFeign.
   - Async flow via RabbitMQ: `bookmall-payment` publishes pay-success events; `bookmall-order` consumes them to mark orders paid; `bookmall-order` and `bookmall-stock` exchange stock confirm/release events. Producers/consumers live in each module's `mq` package.
 - REST APIs are documented with Knife4j (springdoc) in each service.
 - `front/`: Vue 3 + Vite app under `front/src/` — axios wrapper and endpoints in `src/api/` (`http.js`, `bookmall.js`), views in `src/views/` (Home, Books, Cart, Orders, Address, Login, AiChat).

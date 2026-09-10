@@ -49,8 +49,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { aiApi } from '../api/bookmall'
+import { reactive, ref } from 'vue'
+import { aiApi, aiChatStream } from '../api/bookmall'
 
 const CONVERSATION_KEY = 'bookmall_ai_conversation'
 
@@ -77,13 +77,31 @@ async function send() {
   sending.value = true
   error.value = ''
 
+  // 先占一个空的助手气泡，流式增量逐字追加（打字机效果）
+  const bubble = reactive({ role: 'assistant', text: '' })
+  messages.value.push(bubble)
+
   try {
-    const data = await aiApi.chat({ message: text, conversationId: conversationId.value || undefined })
-    rememberConversation(data?.conversationId)
-    messages.value.push({ role: 'assistant', text: data?.reply || '没有拿到回复，请稍后再试。' })
+    await aiChatStream(
+      { message: text, conversationId: conversationId.value || undefined },
+      {
+        onMeta: (id) => rememberConversation(id),
+        onDelta: (token) => { bubble.text += token }
+      }
+    )
+    if (!bubble.text) bubble.text = '没有拿到回复，请稍后再试。'
   } catch (e) {
-    error.value = e.message || 'AI 服务暂时不可用'
-    messages.value.push({ role: 'assistant', text: '抱歉，我这边暂时无法回复，请稍后再试或检查 AI 服务是否已启动。' })
+    // 流式失败时降级为同步接口；若已收到部分增量则保留半截回答，不再重复请求
+    if (!bubble.text) {
+      try {
+        const data = await aiApi.chat({ message: text, conversationId: conversationId.value || undefined })
+        rememberConversation(data?.conversationId)
+        bubble.text = data?.reply || '没有拿到回复，请稍后再试。'
+      } catch (e2) {
+        error.value = e2.message || 'AI 服务暂时不可用'
+        bubble.text = '抱歉，我这边暂时无法回复，请稍后再试或检查 AI 服务是否已启动。'
+      }
+    }
   } finally {
     sending.value = false
   }

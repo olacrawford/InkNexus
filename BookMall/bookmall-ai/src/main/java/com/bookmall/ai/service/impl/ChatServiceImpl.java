@@ -3,6 +3,7 @@ package com.bookmall.ai.service.impl;
 import com.bookmall.ai.ai.BookAssistantAiService;
 import com.bookmall.ai.dto.ChatRequest;
 import com.bookmall.ai.dto.ChatResponse;
+import com.bookmall.ai.dto.StreamChatSession;
 import com.bookmall.ai.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,14 +19,24 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public ChatResponse chat(Long userId, ChatRequest request) {
-        // 若前端没传会话 ID，就自己生成一个随机 ID，用它来做到“连续对话”
-        String conversationId = request.getConversationId() == null || request.getConversationId().isBlank()
-                ? UUID.randomUUID().toString()
-                : request.getConversationId();
-        // 记忆键 = 用户 + 会话，天然隔离不同用户与不同会话，避免串数据
-        String memoryId = userId + ":" + conversationId;
+        String memoryId = userId + ":" + resolveConversationId(request);
         // 调用 LangChain4j 生成的代理实现：内部会带上系统提示词、历史记忆和可用的 @Tool
         String reply = aiService.chat(memoryId, request.getMessage());
-        return ChatResponse.of(reply, conversationId);
+        return ChatResponse.of(reply, memoryId.split(":", 2)[1]);
+    }
+
+    @Override
+    public StreamChatSession streamChat(Long userId, ChatRequest request) {
+        String conversationId = resolveConversationId(request);
+        String memoryId = userId + ":" + conversationId;
+        // TokenStream 由控制器逐段推送 SSE，记忆与工具调用和同步链路完全一致
+        return new StreamChatSession(conversationId, aiService.chatStream(memoryId, request.getMessage()));
+    }
+
+    private String resolveConversationId(ChatRequest request) {
+        // 若前端没传会话 ID，就自己生成一个随机 ID，用它来做到“连续对话”
+        return request.getConversationId() == null || request.getConversationId().isBlank()
+                ? UUID.randomUUID().toString()
+                : request.getConversationId();
     }
 }

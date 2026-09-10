@@ -1,7 +1,9 @@
 package com.bookmall.ai.config;
 
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +28,22 @@ public class AiModelConfig {
     @Bean
     public ChatModel chatModel() {
         return OpenAiChatModel.builder()
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
+                .modelName(model)
+                .temperature(temperature)
+                .maxTokens(maxTokens)
+                .timeout(timeout)
+                .build();
+    }
+
+    /**
+     * 流式模型 Bean：与 ChatModel 同一套配置，走 OpenAI 兼容模式的 stream 接口。
+     * 存在该 Bean 时，LangChain4j 会为 @AiService 接口启用 TokenStream 返回类型（SSE 流式输出）。
+     */
+    @Bean
+    public StreamingChatModel streamingChatModel() {
+        return OpenAiStreamingChatModel.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
                 .modelName(model)
