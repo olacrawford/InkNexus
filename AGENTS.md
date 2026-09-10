@@ -14,9 +14,11 @@ The Git root is this directory.
   - `bookmall-payment` (8051): mock payment records and order paid-state updates via OpenFeign.
   - `bookmall-gateway` (8080): routing, JWT validation, and `X-User-Id`.
   - `bookmall-ai` (8071): read-only chatbot using LangChain4j + DashScope (Qwen); session memory in Redis; calls book/order via OpenFeign.
-- `front/`: Vue 3 + Vite app under `front/src/`, including the cart page at `front/src/views/CartView.vue`.
+  - Async flow via RabbitMQ: `bookmall-payment` publishes pay-success events; `bookmall-order` consumes them to mark orders paid; `bookmall-order` and `bookmall-stock` exchange stock confirm/release events. Producers/consumers live in each module's `mq` package.
+- REST APIs are documented with Knife4j (springdoc) in each service.
+- `front/`: Vue 3 + Vite app under `front/src/` — axios wrapper and endpoints in `src/api/` (`http.js`, `bookmall.js`), views in `src/views/` (Home, Books, Cart, Orders, Address, Login, AiChat).
 - `sql/sql.txt`: complete MySQL schema and seed data, including all 9 tables.
-- `sql/updates/`: incremental SQL scripts for existing environments.
+- `sql/updates/`: numbered incremental SQL scripts (`001_*.sql` …) for existing environments.
 - `nacos-config/`: per-service config and `publish.sh`.
 - `docker-compose.infra.yml`: local MySQL, Nacos, Redis, and RabbitMQ for macOS / Docker Desktop.
 - `scripts/dev-macos.sh`: optional macOS bootstrap for infra + Nacos config publishing.
@@ -47,7 +49,7 @@ Frontend: keep requests in `front/src/api/`, views in `front/src/views/`, and us
 
 ## Testing Guidelines
 
-Backend tests are not present yet. Add JUnit 5 under `BookMall/<module>/src/test/java/com/bookmall/<module>`, plus `spring-boot-starter-test` in that module's `pom.xml`. Name tests `method_expectedBehavior_whenCondition`, e.g. `createOrder_snapshotPrice_whenBookExists`. Run targeted tests with `mvn -f BookMall/pom.xml -pl <module> -am test`. No frontend test runner is configured; verify with `npm run dev`.
+All backend modules have JUnit 5 + Mockito unit tests under `BookMall/<module>/src/test/java/com/bookmall/<module>`; they are plain unit tests (MockitoExtension, mocked mappers/Feign clients/MQ publishers) and do not start a Spring context or require infra. Add new tests there, name them `method_expectedBehavior_whenCondition`, e.g. `createOrder_snapshotPrice_whenBookExists`. Run targeted tests with `mvn -f BookMall/pom.xml -pl <module> -am test`. No frontend test runner is configured; verify with `npm run dev`.
 
 ## Commit & Pull Request Guidelines
 
