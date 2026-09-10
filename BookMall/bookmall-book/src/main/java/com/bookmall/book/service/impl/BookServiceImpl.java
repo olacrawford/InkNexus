@@ -9,13 +9,13 @@ import com.bookmall.book.dto.BookUpdateRequest;
 import com.bookmall.book.entity.Book;
 import com.bookmall.book.mapper.BookMapper;
 import com.bookmall.book.service.BookService;
+import com.bookmall.book.support.BookDetailCache;
 import com.bookmall.book.vo.BookDetailVO;
 import com.bookmall.book.vo.BookVO;
 import com.bookmall.common.exception.BusinessException;
 import com.bookmall.common.result.PageResult;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -26,10 +26,12 @@ import java.util.stream.Collectors;
 public class BookServiceImpl implements BookService {
 
     private final BookMapper bookMapper;
+    private final BookDetailCache detailCache;
 
-    //构造注入mapper
-    public BookServiceImpl(BookMapper bookMapper) {
+    //构造注入mapper与详情缓存组件
+    public BookServiceImpl(BookMapper bookMapper, BookDetailCache detailCache) {
         this.bookMapper = bookMapper;
+        this.detailCache = detailCache;
     }
 
     /**
@@ -63,22 +65,21 @@ public class BookServiceImpl implements BookService {
 
     /**
      * 根据id查询图书详情
+     * <p>详情走手写 Cache-Aside：互斥重建防击穿、空值缓存防穿透（见 {@link BookDetailCache}）
      * @param id 图书id
      * @return 图书详情VO，不存在返回null
      */
     @Override
-    @Cacheable(cacheNames = "book")
     @SentinelResource(value = "getBookById", blockHandler = "getBookByIdBlocked")
     public BookDetailVO getBookById(Long id) {
-        Book book = bookMapper.selectOne(
-                new LambdaQueryWrapper<Book>()
-                        .eq(Book::getId, id)
-                        .eq(Book::getStatus, 1)
-        );
-        if (book == null) {
-            return null;
-        }
-        return toDetailVO(book);
+        return detailCache.load(id, () -> {
+            Book book = bookMapper.selectOne(
+                    new LambdaQueryWrapper<Book>()
+                            .eq(Book::getId, id)
+                            .eq(Book::getStatus, 1)
+            );
+            return book == null ? null : toDetailVO(book);
+        });
     }
 
     /**
@@ -124,10 +125,7 @@ public class BookServiceImpl implements BookService {
      * @return 新增完成的图书详情VO
      */
     @Override
-    @Caching(evict = {
-        @CacheEvict(cacheNames = "book", allEntries = true),
-        @CacheEvict(cacheNames = "books", allEntries = true)
-    })
+    @CacheEvict(cacheNames = "books", allEntries = true)
     public BookDetailVO createBook(BookCreateRequest request) {
         Book book = new Book();
         book.setTitle(request.getTitle());
@@ -151,10 +149,7 @@ public class BookServiceImpl implements BookService {
      * @return 修改后详情VO，图书不存在返回null
      */
     @Override
-    @Caching(evict = {
-        @CacheEvict(cacheNames = "book", allEntries = true),
-        @CacheEvict(cacheNames = "books", allEntries = true)
-    })
+    @CacheEvict(cacheNames = "books", allEntries = true)
     public BookDetailVO updateBook(Long id, BookUpdateRequest request) {
         Book book = bookMapper.selectById(id);
         if (book == null) {
@@ -171,6 +166,8 @@ public class BookServiceImpl implements BookService {
         book.setUpdateTime(LocalDateTime.now());
 
         bookMapper.updateById(book);
+        // 先更库后精确驱逐该本图书的详情缓存，避免全清带来的缓存命中率抖动
+        detailCache.evict(id);
         return toDetailVO(book);
     }
 
@@ -180,16 +177,14 @@ public class BookServiceImpl implements BookService {
      * @return true删除成功，false图书不存在
      */
     @Override
-    @Caching(evict = {
-        @CacheEvict(cacheNames = "book", allEntries = true),
-        @CacheEvict(cacheNames = "books", allEntries = true)
-    })
+    @CacheEvict(cacheNames = "books", allEntries = true)
     public boolean deleteBook(Long id) {
         Book book = bookMapper.selectById(id);
         if (book == null) {
             return false;
         }
         bookMapper.deleteById(id);
+        detailCache.evict(id);
         return true;
     }
 

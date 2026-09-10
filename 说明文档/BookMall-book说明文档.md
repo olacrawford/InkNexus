@@ -81,15 +81,26 @@
 
 当前 `t_category` 是平铺大类，没有父子分类字段。
 
-## 6. 缓存实现
+## 6. 缓存实现与三大问题防护
 
-当前缓存使用 Spring Cache + Redis：
+列表/分类缓存使用 Spring Cache + Redis：
 
-- `getBookById()` 使用 `@Cacheable(cacheNames = "book")`，键为 `book::<id>`
 - `listBooks()` 和 `pageBooks()` 使用 `@Cacheable(cacheNames = "books")`，键为 `books::...`
 - `listCategories()` 使用 `@Cacheable(cacheNames = "category")`，键为 `category::...`
-- 所有缓存统一 30 分钟过期；查询结果为 `null` 时不写入缓存
-- 新增、修改、删除图书时使用 `@Caching` 清理 `book` 和 `books` 两个缓存空间
+- 新增、修改、删除图书时 `@CacheEvict` 清理 `books` 缓存空间
+
+缓存三大问题的防护：
+
+| 问题 | 方案 | 实现 |
+|---|---|---|
+| 穿透 | 空值缓存 | 图书详情走手写 Cache-Aside（`BookDetailCache`）：不存在的 id 写入 `cache:book:detail::<id>` = `__NULL__`，TTL 2 分钟，恶意重复查询不再打 MySQL |
+| 击穿 | 互斥重建 | 缓存未命中先 `SETNX` 抢锁（TTL 10 秒防死锁），仅一个线程回源重建，其余自旋重读；重建前双重检查；释放用 Lua「校验锁值再删除」防误删；自旋超时直接回源兜底保证可用性 |
+| 雪崩 | TTL 随机抖动 + 分级 TTL | `JitterRedisCacheWriter` 装饰器在写入时把 TTL 缩放到基准 ±10% 随机取值；分类基准 60 分钟、图书列表/分页 30 分钟 |
+
+其它设计点：
+
+- 写操作后「先更库后删缓存」，且详情缓存按 id **精确驱逐**（替代原来 `allEntries` 全清，减少命中率抖动）；列表类缓存变化面广仍整空间清理
+- 缓存 JSON 损坏时自动删除并重建，不会把坏数据当作「不存在」返回
 
 ## 7. Sentinel 限流
 

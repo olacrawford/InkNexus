@@ -7,7 +7,7 @@ The Git root is this directory. The project is branded 墨枢 InkNexus, but the 
 - `BookMall/`: Spring Cloud Alibaba backend:
   - `bookmall-common`: shared `Result`, `PageResult`, errors, and exceptions.
   - `bookmall-auth` (8060): registration, login, JWT, and user address management.
-  - `bookmall-book` (8070): books, categories, pagination, Redis, and Sentinel.
+  - `bookmall-book` (8070): books, categories, pagination, Redis, and Sentinel. Cache protections live in `BookDetailCache` (mutex rebuild via SETNX + Lua unlock, null-mark for penetration) and `JitterRedisCacheWriter` (±10% TTL jitter for avalanche).
   - `bookmall-cart` (8083): cart items with quantity/selection and Feign validation against the book service.
   - `bookmall-stock` (8090): book stock queries, order-time reservation, payment confirmation, and cancellation release.
   - `bookmall-order` (8050): direct/cart orders, paid-stock confirmation, timeout close, and OpenFeign calls to book, cart, and stock services.

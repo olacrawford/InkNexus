@@ -2,39 +2,48 @@ package com.bookmall.book.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import java.time.Duration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.cache.RedisCacheWriter;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 
+import java.time.Duration;
+
 /**
- * Redis缓存配置类
- * SpringCache默认使用JDK序列化，会出现二进制乱码；
- * 这里改成JSON序列化，Redis客户端能看懂存的数据，不需要实体实现Serializable接口
+ * Redis 缓存配置：JSON 序列化 + 分级 TTL + 随机抖动（缓存雪崩防护）。
+ *
+ * <p>SpringCache 默认 JDK 序列化会出现二进制乱码，这里统一改成 JSON 序列化；
+ * 不同 cacheName 配不同基准 TTL（分类变化少给更长），写入时再经 {@link JitterRedisCacheWriter}
+ * 加 ±10% 随机抖动，避免同批 key 同时到期把请求压到 MySQL。
+ * 缓存穿透与击穿的防护在 {@link com.bookmall.book.support.BookDetailCache} 中实现。
  */
-@Configuration // 标记这是配置类，项目启动会执行这个类，向Spring注册Bean
+@Configuration
 public class RedisConfig {
 
-    /**
-     * 自定义缓存管理器cacheManager，覆盖SpringCache默认配置
-     * @param factory Redis连接工厂，Spring自动注入，包含redis地址、端口等连接信息
-     * @return RedisCacheManager 缓存管理器对象，SpringCache底层靠它操作Redis
-     */
-    @Bean // 将该方法返回的对象交给Spring容器管理，替换默认的CacheManager
-    public RedisCacheManager cacheManager(RedisConnectionFactory factory) {
-        // 获取默认缓存配置
-        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-                // 设置统一过期时间，避免缓存永久占用 Redis
-                .entryTtl(Duration.ofMinutes(30))
+    @Bean
+    public RedisCacheWriter redisCacheWriter(RedisConnectionFactory factory) {
+        return new JitterRedisCacheWriter(
+                RedisCacheWriter.nonLockingRedisCacheWriter(factory), 0.1);
+    }
+
+    @Bean
+    public RedisCacheManager cacheManager(RedisConnectionFactory factory, RedisCacheWriter writer) {
+        return RedisCacheManager.builder(writer)
+                .cacheDefaults(baseConfig().entryTtl(Duration.ofMinutes(30)))
+                // 分类数据变化少：基准 TTL 更长
+                .withCacheConfiguration("category", baseConfig().entryTtl(Duration.ofMinutes(60)))
+                // 图书列表 / 分页
+                .withCacheConfiguration("books", baseConfig().entryTtl(Duration.ofMinutes(30)))
+                .build();
+    }
+
+    private RedisCacheConfiguration baseConfig() {
+        return RedisCacheConfiguration.defaultCacheConfig()
+                // 列表/分页缓存不存 null（穿透防护由详情空值缓存负责）
                 .disableCachingNullValues()
-                // 设置value值使用Jackson JSON序列化器
                 .serializeValuesWith(RedisSerializationContext.SerializationPair
                         .fromSerializer(new GenericJackson2JsonRedisSerializer()));
-
-        // 使用连接工厂 + 自定义配置，构建RedisCacheManager
-        return RedisCacheManager.builder(factory).cacheDefaults(config).build();
     }
 }

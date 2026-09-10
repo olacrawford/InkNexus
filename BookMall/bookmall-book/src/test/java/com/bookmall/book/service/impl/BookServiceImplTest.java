@@ -3,6 +3,7 @@ package com.bookmall.book.service.impl;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bookmall.book.entity.Book;
 import com.bookmall.book.mapper.BookMapper;
+import com.bookmall.book.support.BookDetailCache;
 import com.bookmall.book.vo.BookDetailVO;
 import com.bookmall.book.vo.BookVO;
 import com.bookmall.common.result.PageResult;
@@ -14,10 +15,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,12 +29,14 @@ class BookServiceImplTest {
 
     @Mock
     private BookMapper bookMapper;
+    @Mock
+    private BookDetailCache detailCache;
 
     private BookServiceImpl bookService;
 
     @BeforeEach
     void setUp() {
-        bookService = new BookServiceImpl(bookMapper);
+        bookService = new BookServiceImpl(bookMapper, detailCache);
     }
 
     @Test
@@ -47,19 +52,25 @@ class BookServiceImplTest {
     }
 
     @Test
-    void getBookById_returnsDetail_whenBookExists() {
+    void getBookById_loadsDetailThroughCache() {
         when(bookMapper.selectOne(any())).thenReturn(book());
+        // 详情走 BookDetailCache：load 未命中时通过 loader 回源
+        when(detailCache.load(eq(1L), any())).thenAnswer(invocation ->
+                ((Supplier<BookDetailVO>) invocation.getArgument(1)).get());
 
         BookDetailVO result = bookService.getBookById(1L);
 
         assertEquals("Java核心技术", result.getTitle());
         assertEquals("凯·霍斯特曼", result.getAuthor());
         assertEquals(2L, result.getCategoryId());
+        verify(detailCache).load(eq(1L), any());
     }
 
     @Test
     void getBookById_returnsNull_whenBookNotFound() {
         when(bookMapper.selectOne(any())).thenReturn(null);
+        when(detailCache.load(eq(999L), any())).thenAnswer(invocation ->
+                ((Supplier<BookDetailVO>) invocation.getArgument(1)).get());
 
         assertNull(bookService.getBookById(999L));
     }
