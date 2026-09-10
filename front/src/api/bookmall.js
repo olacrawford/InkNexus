@@ -112,3 +112,52 @@ export const aiApi = {
     return http.get('/api/ai/hello').then(unwrapResult)
   }
 }
+
+// SSE 流式对话：EventSource 不支持 POST，用 fetch + ReadableStream 解析
+// 事件协议：meta=会话ID，delta=增量文本，done=结束。失败时调用方应降级到 aiApi.chat
+export async function aiChatStream(payload, { onMeta, onDelta } = {}) {
+  const token = localStorage.getItem('bookmall_token')
+  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/ai/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) return
+    buffer += decoder.decode(value, { stream: true })
+    let sep
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      const fields = parseSseFrame(frame)
+      if (!fields) continue
+      if (fields.event === 'meta') onMeta?.(fields.data)
+      else if (fields.event === 'delta') onDelta?.(fields.data)
+      else if (fields.event === 'done') return
+    }
+  }
+}
+
+function parseSseFrame(frame) {
+  let event = 'message'
+  const dataLines = []
+  for (const rawLine of frame.split('\n')) {
+    const line = rawLine.replace(/\r$/, '')
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    else if (line.startsWith('data:')) {
+      // SSE 规范只去掉冒号后的一个空格，保留 token 自身的空白
+      dataLines.push(line.startsWith('data: ') ? line.slice(6) : line.slice(5))
+    }
+  }
+  if (!dataLines.length) return null
+  return { event, data: dataLines.join('\n') }
+}

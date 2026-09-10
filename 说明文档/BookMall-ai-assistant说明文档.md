@@ -7,6 +7,7 @@
 当前已实现：
 
 - `POST /ai/chat`：接收用户消息，AI 结合工具回答
+- `POST /ai/chat/stream`：SSE 流式对话，逐 token 推送（`/ai/chat` 保留为降级接口）
 - `GET /ai/hello`：健康检查
 - 工具：`searchBooks` / `listCategories` / `queryMyOrders` / `queryOrderDetail`
 - 只读：仅通过 OpenFeign 调 book / order 的查询接口，不参与下单、支付、退款、取消
@@ -79,6 +80,25 @@ AI 对话。请求头必须携带 `X-User-Id`（网关注入）。
 ```
 
 `conversationId` 缺省时服务端自动生成，作为 Redis 会话记忆的隔离键。
+
+### 4.3 POST /ai/chat/stream
+
+AI 流式对话（SSE）。请求头、请求体与 `POST /ai/chat` 完全一致，会话记忆与 Function Calling 工具调用共用同一条链路；`POST /ai/chat` 保留作为降级接口。
+
+响应为 `text/event-stream`，事件协议：
+
+| 事件 | data 内容 | 说明 |
+|---|---|---|
+| `meta` | 会话 ID | 首个事件，前端保存后用于多轮记忆 |
+| `delta` | 增量文本片段 | 逐 token 推送，前端追加渲染打字机效果 |
+| `done` | `[DONE]` | 回复结束，连接关闭 |
+
+实现说明：
+
+- `AiModelConfig` 同时声明 `ChatModel` 与 `StreamingChatModel`（OpenAI 兼容模式 stream 接口），LangChain4j 据此为 `@AiService` 接口的 `TokenStream chatStream(...)` 方法绑定流式模型
+- 控制器用 Spring MVC `SseEmitter` 桥接 `TokenStream` 回调，超时 120 秒
+- `EventSource` 不支持 POST，前端用 `fetch` + `ReadableStream` 解析 SSE 帧（`front/src/api/bookmall.js` 的 `aiChatStream`），流式失败自动降级 `POST /ai/chat`
+- 网关为 Spring Cloud Gateway（Netty），原生透传流式响应，无需额外配置
 
 ## 5. 依赖的现有服务接口
 
