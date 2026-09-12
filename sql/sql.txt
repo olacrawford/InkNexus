@@ -10,6 +10,7 @@ CREATE TABLE t_user (
     phone VARCHAR(20) DEFAULT NULL COMMENT '手机号',
     email VARCHAR(100) DEFAULT NULL COMMENT '邮箱',
     status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1启用 0禁用',
+    role VARCHAR(20) NOT NULL DEFAULT 'USER' COMMENT '角色：USER普通用户 ADMIN管理员',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     UNIQUE KEY uk_username (username)
@@ -143,6 +144,16 @@ CREATE TABLE t_payment (
     UNIQUE KEY uk_order_id (order_id),
     KEY idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付单表';
+
+-- MQ 消费去重记录表：库存确认/释放消息按 eventId 幂等消费，与库存更新同事务写入
+DROP TABLE IF EXISTS t_mq_consumed_log;
+CREATE TABLE t_mq_consumed_log (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    message_id VARCHAR(64) NOT NULL COMMENT '消息 eventId（发布时生成，重投不变）',
+    consumer VARCHAR(50) NOT NULL COMMENT '消费方：stock-confirm / stock-release',
+    consume_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '消费时间',
+    UNIQUE KEY uk_message_id (message_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='MQ消费去重记录';
 
 -- 分类示例数据（大类，不再细分）
 INSERT INTO t_category (name, sort, status) VALUES
