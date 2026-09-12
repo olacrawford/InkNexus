@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.stock.dto.StockOperationItem;
 import com.inknexus.stock.entity.BookStock;
+import com.inknexus.stock.mapper.MqConsumedLogMapper;
 import com.inknexus.stock.mapper.StockMapper;
 import com.inknexus.stock.service.StockService;
 import com.inknexus.stock.vo.StockVO;
@@ -14,16 +15,20 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * 库存业务：查询、预占和释放。
+ * 库存业务：查询、预占、释放和确认。
+ * 释放/确认由 MQ 消息驱动，按消息 eventId 做消费幂等：
+ * 去重记录与库存更新写在同一事务，重复投递的消息不会再次执行库存操作。
  */
 @Slf4j
 @Service
 public class StockServiceImpl implements StockService {
 
     private final StockMapper stockMapper;
+    private final MqConsumedLogMapper mqConsumedLogMapper;
 
-    public StockServiceImpl(StockMapper stockMapper) {
+    public StockServiceImpl(StockMapper stockMapper, MqConsumedLogMapper mqConsumedLogMapper) {
         this.stockMapper = stockMapper;
+        this.mqConsumedLogMapper = mqConsumedLogMapper;
     }
 
     @Override
@@ -51,7 +56,11 @@ public class StockServiceImpl implements StockService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void release(List<StockOperationItem> items) {
+    public boolean release(String messageId, List<StockOperationItem> items) {
+        if (!markConsumed(messageId, "stock-release")) {
+            log.info("库存释放消息重复投递，跳过：messageId={}", messageId);
+            return false;
+        }
         for (StockOperationItem item : items) {
             // 原子更新返回0说明没有锁定库存，按已释放处理，避免历史订单或重试补偿卡住
             int affected = stockMapper.releaseStock(item.getBookId(), item.getQuantity());
@@ -59,11 +68,16 @@ public class StockServiceImpl implements StockService {
                 log.info("库存无需释放或已释放：图书ID {}", item.getBookId());
             }
         }
+        return true;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void confirm(List<StockOperationItem> items) {
+    public boolean confirm(String messageId, List<StockOperationItem> items) {
+        if (!markConsumed(messageId, "stock-confirm")) {
+            log.info("库存确认消息重复投递，跳过：messageId={}", messageId);
+            return false;
+        }
         for (StockOperationItem item : items) {
             // 支付完成才允许确认；锁定库存不足时抛出异常，让订单事务回滚
             int affected = stockMapper.confirmStock(item.getBookId(), item.getQuantity());
@@ -71,6 +85,19 @@ public class StockServiceImpl implements StockService {
                 throw new BusinessException(500, "库存确认失败：图书ID " + item.getBookId());
             }
         }
+        return true;
+    }
+
+    /**
+     * 消费去重：insertOnce 命中唯一键返回 0 表示消息已消费过。
+     * 去重记录与后续库存更新在同一事务——库存操作异常回滚时记录一并回滚，消息重投后仍可重试。
+     */
+    private boolean markConsumed(String messageId, String consumer) {
+        if (messageId == null || messageId.isBlank()) {
+            // 事件ID缺失的消息无法去重，按首次消费处理，幂等仍由状态条件更新与 LEAST 钳制兜底
+            return true;
+        }
+        return mqConsumedLogMapper.insertOnce(messageId, consumer) > 0;
     }
 
     private boolean alreadyConfirmed(Long bookId) {

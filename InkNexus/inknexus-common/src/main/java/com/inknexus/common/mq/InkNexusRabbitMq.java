@@ -25,4 +25,12 @@ public final class InkNexusRabbitMq {
     public static final String ORDER_CLOSE_DELAY_QUEUE = "inknexus.order.close.delay.queue";
     public static final String ORDER_CLOSE_QUEUE = "inknexus.order.close.queue";
     public static final String ORDER_CLOSE_ROUTING_KEY = "order.close";
+
+    // 死信拓扑：业务队列消费重试耗尽的消息统一进入死信队列，等待人工排查后处理
+    public static final String DLX_EXCHANGE = "inknexus.dlx.exchange";
+    public static final String DLX_QUEUE = "inknexus.dlx.queue";
+    public static final String DLX_KEY_PAY_SUCCESS = "dlx.pay.success";
+    public static final String DLX_KEY_ORDER_PAID = "dlx.order.paid";
+    public static final String DLX_KEY_STOCK_RELEASE = "dlx.order.stock.release";
+    public static final String DLX_KEY_ORDER_CLOSE = "dlx.order.close";
 }

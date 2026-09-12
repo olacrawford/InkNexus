@@ -6,6 +6,7 @@ import com.inknexus.common.mq.OrderStockEvent;
 import com.inknexus.common.mq.StockItemMessage;
 import com.inknexus.order.client.dto.StockOperationItem;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +14,7 @@ import java.util.List;
 
 /**
  * 发布订单支付/释放库存事件与超时关单延迟消息，库存服务和订单自身订阅处理。
+ * 发布时携带 CorrelationData（eventId），publisher confirm 失败的日志能对应到具体订单。
  */
 @Component
 public class OrderEventPublisher {
@@ -42,7 +44,7 @@ public class OrderEventPublisher {
         OrderCloseDelayMessage message = new OrderCloseDelayMessage();
         message.setOrderId(orderId);
         rabbitTemplate.convertAndSend("", InkNexusRabbitMq.ORDER_CLOSE_DELAY_QUEUE,
-                objectMapper.writeValueAsString(message));
+                objectMapper.writeValueAsString(message), new CorrelationData(message.getEventId()));
     }
 
     private void publish(String operation, Long orderId, Long userId,
@@ -55,6 +57,7 @@ public class OrderEventPublisher {
                 .map(item -> new StockItemMessage(item.getBookId(), item.getQuantity()))
                 .toList());
         String payload = objectMapper.writeValueAsString(event);
-        rabbitTemplate.convertAndSend(InkNexusRabbitMq.ORDER_STOCK_EXCHANGE, routingKey, payload);
+        rabbitTemplate.convertAndSend(InkNexusRabbitMq.ORDER_STOCK_EXCHANGE, routingKey, payload,
+                new CorrelationData(event.getEventId()));
     }
 }

@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * 订单服务声明支付成功消费队列、订单状态事件队列和超时关单延迟队列。
+ * 业务队列统一挂死信交换机：消费重试耗尽的消息进入 {@code inknexus.dlx.queue} 等待人工处理。
  */
 @Configuration
 @EnableRabbit
@@ -26,7 +27,11 @@ public class RabbitMqConfig {
 
     @Bean
     public Queue paySuccessQueue() {
-        return new Queue(InkNexusRabbitMq.PAY_SUCCESS_QUEUE, true);
+        // payment 服务声明同名队列，死信参数必须与这里完全一致（RabbitMQ 等价声明校验）
+        return QueueBuilder.durable(InkNexusRabbitMq.PAY_SUCCESS_QUEUE)
+                .deadLetterExchange(InkNexusRabbitMq.DLX_EXCHANGE)
+                .deadLetterRoutingKey(InkNexusRabbitMq.DLX_KEY_PAY_SUCCESS)
+                .build();
     }
 
     @Bean
@@ -43,12 +48,19 @@ public class RabbitMqConfig {
 
     @Bean
     public Queue orderPaidQueue() {
-        return new Queue(InkNexusRabbitMq.ORDER_PAID_QUEUE, true);
+        // stock 服务声明同名队列，死信参数必须与这里完全一致
+        return QueueBuilder.durable(InkNexusRabbitMq.ORDER_PAID_QUEUE)
+                .deadLetterExchange(InkNexusRabbitMq.DLX_EXCHANGE)
+                .deadLetterRoutingKey(InkNexusRabbitMq.DLX_KEY_ORDER_PAID)
+                .build();
     }
 
     @Bean
     public Queue orderStockReleaseQueue() {
-        return new Queue(InkNexusRabbitMq.ORDER_STOCK_RELEASE_QUEUE, true);
+        return QueueBuilder.durable(InkNexusRabbitMq.ORDER_STOCK_RELEASE_QUEUE)
+                .deadLetterExchange(InkNexusRabbitMq.DLX_EXCHANGE)
+                .deadLetterRoutingKey(InkNexusRabbitMq.DLX_KEY_STOCK_RELEASE)
+                .build();
     }
 
     @Bean
@@ -88,7 +100,10 @@ public class RabbitMqConfig {
 
     @Bean
     public Queue orderCloseQueue() {
-        return new Queue(InkNexusRabbitMq.ORDER_CLOSE_QUEUE, true);
+        return QueueBuilder.durable(InkNexusRabbitMq.ORDER_CLOSE_QUEUE)
+                .deadLetterExchange(InkNexusRabbitMq.DLX_EXCHANGE)
+                .deadLetterRoutingKey(InkNexusRabbitMq.DLX_KEY_ORDER_CLOSE)
+                .build();
     }
 
     @Bean
@@ -96,5 +111,45 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(orderCloseQueue)
                 .to(orderCloseExchange)
                 .with(InkNexusRabbitMq.ORDER_CLOSE_ROUTING_KEY);
+    }
+
+    // ===== 死信拓扑：消费重试耗尽的消息统一落地，等待人工排查 =====
+
+    @Bean
+    public DirectExchange dlxExchange() {
+        return new DirectExchange(InkNexusRabbitMq.DLX_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue dlxQueue() {
+        return new Queue(InkNexusRabbitMq.DLX_QUEUE, true);
+    }
+
+    @Bean
+    public Binding dlxPaySuccessBinding(DirectExchange dlxExchange, Queue dlxQueue) {
+        return BindingBuilder.bind(dlxQueue)
+                .to(dlxExchange)
+                .with(InkNexusRabbitMq.DLX_KEY_PAY_SUCCESS);
+    }
+
+    @Bean
+    public Binding dlxOrderPaidBinding(DirectExchange dlxExchange, Queue dlxQueue) {
+        return BindingBuilder.bind(dlxQueue)
+                .to(dlxExchange)
+                .with(InkNexusRabbitMq.DLX_KEY_ORDER_PAID);
+    }
+
+    @Bean
+    public Binding dlxStockReleaseBinding(DirectExchange dlxExchange, Queue dlxQueue) {
+        return BindingBuilder.bind(dlxQueue)
+                .to(dlxExchange)
+                .with(InkNexusRabbitMq.DLX_KEY_STOCK_RELEASE);
+    }
+
+    @Bean
+    public Binding dlxOrderCloseBinding(DirectExchange dlxExchange, Queue dlxQueue) {
+        return BindingBuilder.bind(dlxQueue)
+                .to(dlxExchange)
+                .with(InkNexusRabbitMq.DLX_KEY_ORDER_CLOSE);
     }
 }

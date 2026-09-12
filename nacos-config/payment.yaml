@@ -9,6 +9,21 @@ spring:
     port: 5672
     username: admin
     password: 123456
+    # 发布端确认：消息未到达 broker 或无法路由时记录 error 日志（回调见 RabbitReliabilityConfig）
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    # 消费端：失败本地重试 3 次后不再 requeue，经死信交换机进入 inknexus.dlx.queue 等待人工处理
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000
+          multiplier: 2.0
+          max-interval: 10000
   cloud:
     openfeign:
       client:
@@ -16,3 +31,8 @@ spring:
           default:
             connect-timeout: 3000
             read-timeout: 5000
+
+# 日志带 TraceId：common 的 TraceIdFilter 把网关注入的 X-Trace-Id 写入 MDC，跨服务日志可串联
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:-},%X{traceId:-}]"
