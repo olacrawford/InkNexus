@@ -7,3 +7,8 @@ spring:
 jwt:
   secret: inknexus-jwt-secret-key-2026-safe
   expire-seconds: 86400
+
+# 日志带 TraceId：common 的 TraceIdFilter 把网关注入的 X-Trace-Id 写入 MDC，跨服务日志可串联
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:-},%X{traceId:-}]"

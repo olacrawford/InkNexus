@@ -23,3 +23,7 @@ ai-assistant:
   chat:
     memory-ttl-hours: 2
     tool-result-limit: 5
+# 日志带 TraceId：common 的 TraceIdFilter 把网关注入的 X-Trace-Id 写入 MDC，跨服务日志可串联
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:-},%X{traceId:-}]"
