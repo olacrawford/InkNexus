@@ -68,12 +68,16 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
                     .parseClaimsJws(authHeader.substring(7))
                     .getBody();
 
-            //从token载荷取出userId
+            //从token载荷取出userId与角色
             String userId = claims.getSubject();
+            String role = claims.get("role", String.class);
 
-            //修改请求，新增请求头X-User-Id，把用户id透传给下游auth、book服务
+            //修改请求，覆盖式写入身份与角色请求头，把用户透传给下游服务。
+            //header() 是 put 语义（整体覆盖），客户端伪造的 X-User-Id / X-User-Role 都会被这里替换；
+            //旧签发的 token 不带 role claim，统一按 USER 透传，管理接口对存量 token 默认关闭（fail-closed）
             ServerHttpRequest mutated = exchange.getRequest().mutate()
                     .header("X-User-Id", userId)
+                    .header("X-User-Role", role == null ? "USER" : role)
                     .build();
 
             //把修改后的请求往下游服务转发

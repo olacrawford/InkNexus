@@ -36,6 +36,7 @@ public class JwtUtil {
                 .setSubject(String.valueOf(user.getId()))   // subject主体，存放用户id
                 .claim("username", user.getUsername())    //自定义载荷字段，存入用户名
                 .claim("nickname", user.getNickname())    //自定义载荷字段，存入昵称
+                .claim("role", user.getRole() == null ? "USER" : user.getRole())  //自定义载荷字段，存入角色，供网关透传给下游做管理接口鉴权
                 .setIssuedAt(now)                           //设置token签发时间：什么时候生成的
                 .setExpiration(expireAt)                    //设置token过期时间
                 .signWith(secretKey)                        //使用密钥对象对整个JWT做签名，防止篡改

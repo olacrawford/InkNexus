@@ -355,7 +355,8 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 标记订单已支付：支付服务完成内部模拟支付后调用。
+     * 标记订单已支付：由 PaySuccessConsumer 消费支付成功消息后调用，
+     * 这是订单进入已支付状态的唯一入口，不对外提供 HTTP 接口。
      */
     @Override
     @Transactional(rollbackFor = Exception.class)

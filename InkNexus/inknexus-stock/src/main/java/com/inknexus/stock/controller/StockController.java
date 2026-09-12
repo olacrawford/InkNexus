@@ -40,17 +40,6 @@ public class StockController {
         return Result.success();
     }
 
-    // 订单服务取消订单或补偿失败时调用，释放之前预占的库存
-    @PostMapping("/release")
-    public Result<Void> release(@Valid @RequestBody StockOperationRequest request) {
-        stockService.release(request.getItems());
-        return Result.success();
-    }
-
-    // 订单服务支付成功后调用，把预占库存确认成真实扣减
-    @PostMapping("/confirm")
-    public Result<Void> confirm(@Valid @RequestBody StockOperationRequest request) {
-        stockService.confirm(request.getItems());
-        return Result.success();
-    }
+    // 说明：release/confirm 曾有 HTTP 调试入口，但订单服务实际只通过 MQ 事件触发库存释放与确认；
+    // 这两个入口允许登录用户绕过订单状态直接篡改库存账目，已下线，与 /orders/{id}/paid 的处理保持一致。
 }

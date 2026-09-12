@@ -76,17 +76,6 @@ public class OrderController {
         return Result.success("取消成功");
     }
 
-    // 手工验证接口；正常支付链路通过 RabbitMQ 支付成功事件处理
-    @PutMapping("/{id}/paid")
-    public Result<String> markPaid(@RequestHeader("X-User-Id") Long userId,
-                                   @PathVariable("id") Long id) {
-        boolean paid = orderService.markPaid(id, userId);
-        if (!paid) {
-            return Result.fail(404, "订单不存在");
-        }
-        return Result.success("支付成功");
-    }
-
     // 确认收货：只允许当前用户把已支付订单标记为已完成
     @PutMapping("/{id}/complete")
     public Result<String> completeOrder(@RequestHeader("X-User-Id") Long userId,

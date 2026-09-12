@@ -91,10 +91,72 @@ class AuthGlobalFilterTest {
         verify(chain).filter(any());
     }
 
+    @Test
+    void filter_overridesForgedUserIdHeader_whenClientSuppliesOne() {
+        // 防回归：mutate().header() 的覆盖语义是把伪造头整体替换，一旦框架改为追加语义此用例必须失败
+        String token = token("7");
+        ServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/orders")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header("X-User-Id", "999")
+                        .build());
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        ArgumentCaptor<ServerWebExchange> captor = ArgumentCaptor.forClass(ServerWebExchange.class);
+        verify(chain).filter(captor.capture());
+        HttpHeaders downstream = captor.getValue().getRequest().getHeaders();
+        assertEquals("7", downstream.getFirst("X-User-Id"));
+        assertEquals(1, downstream.get("X-User-Id").size());
+    }
+
+    @Test
+    void filter_passesRoleHeaderDownstream_whenTokenCarriesRole() {
+        String token = token("7", "ADMIN");
+        ServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/orders")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .build());
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        ArgumentCaptor<ServerWebExchange> captor = ArgumentCaptor.forClass(ServerWebExchange.class);
+        verify(chain).filter(captor.capture());
+        assertEquals("ADMIN", captor.getValue().getRequest().getHeaders().getFirst("X-User-Role"));
+    }
+
+    @Test
+    void filter_overridesForgedRoleHeader_whenTokenHasNoRole() {
+        // 旧 token 没有 role claim 时必须按 USER 透传，客户端伪造的 X-User-Role 不能放行管理接口
+        String token = token("7");
+        ServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/orders")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header("X-User-Role", "ADMIN")
+                        .build());
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        ArgumentCaptor<ServerWebExchange> captor = ArgumentCaptor.forClass(ServerWebExchange.class);
+        verify(chain).filter(captor.capture());
+        assertEquals("USER", captor.getValue().getRequest().getHeaders().getFirst("X-User-Role"));
+    }
+
     private String token(String subject) {
-        return Jwts.builder()
+        return token(subject, null);
+    }
+
+    private String token(String subject, String role) {
+        io.jsonwebtoken.JwtBuilder builder = Jwts.builder()
                 .setSubject(subject)
-                .claim("username", "tester")
+                .claim("username", "tester");
+        if (role != null) {
+            builder.claim("role", role);
+        }
+        return builder
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + 3600_000))
                 .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
