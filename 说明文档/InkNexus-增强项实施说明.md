@@ -12,8 +12,20 @@
 - `cart` / `order` / `payment` 配置 OpenFeign 默认连接和读取超时
 - `inknexus-order` 超时关单分批处理，`t_order` 使用 `(user_id, create_time)` 复合索引
 - `inknexus-ai` 基于 LangChain4j + DashScope 的只读 AI 助手，会话记忆存 Redis
+- 接口安全：下线 `PUT /orders/{id}/paid` 与 `POST /stock/release` / `POST /stock/confirm` 调试入口；`t_user.role` + JWT role claim + 网关透传 `X-User-Role`，图书增删改仅 ADMIN 可用；网关伪造 `X-User-Id` / `X-User-Role` 头有防回归单测
+- MQ 可靠性：库存确认/释放按消息 `eventId` 消费幂等（`t_mq_consumed_log`，与库存更新同事务）；业务队列消费重试 3 次后进入 `inknexus.dlx.queue`；发布端开启 publisher confirm/returns 回调（`RabbitReliabilityConfig`）
+- 全链路 TraceId：网关生成/透传 `X-Trace-Id`，业务服务 `TraceIdFilter` 写入 MDC，Feign 调用自动透传，日志 pattern 带 `[应用名,traceId]`；全局异常处理器落日志，500 响应只返回 traceId 不泄漏内部信息
 
-## 2. Redis 缓存
+## 2. 全链路 TraceId 与日志
+
+- 网关 `TraceIdGlobalFilter`（order=-200）：无头生成 32 位编号、有头原样透传，写入请求头并回写响应头
+- 业务服务 `com.inknexus.common.trace.TraceIdFilter`：读取 `X-Trace-Id` 写入 MDC（key 为 `traceId`），请求结束清理；各服务的 `scanBasePackages` 已包含 `com.inknexus.common`，自动生效
+- Feign 透传：`TraceIdFeignConfig` 带 `@ConditionalOnClass(RequestInterceptor.class)`，只对有 Feign 的服务（order/payment/cart/ai）注册 `TraceIdFeignInterceptor`
+- 异常处理：`GlobalExceptionHandler` 三个分支全部落日志（业务 warn、校验 warn、未知 error 带堆栈），500 响应改为「系统繁忙 + traceId」
+- 日志格式：nacos 各服务 yaml 配置 `logging.pattern.level: "%5p [${spring.application.name:-},%X{traceId:-}]"`
+- 验证方式：经网关调任意接口，响应头带 `X-Trace-Id`；触发一次系统异常，用该编号 grep 各服务日志可串成一条链
+
+## 3. Redis 缓存
 
 ### 2.1 实现方式
 

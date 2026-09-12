@@ -115,15 +115,13 @@
 
 取消订单，只允许取消状态为待支付的订单。
 
-### 4.7 PUT /orders/{id}/paid
-
-订单服务消费 `PaySuccessMessage` 后调用 `markPaid`：把待支付订单更新为已支付，并发布订单支付事件由库存服务确认库存；已支付订单重复调用按成功处理。
-
-### 4.8 PUT /orders/{id}/complete
+### 4.7 PUT /orders/{id}/complete
 
 确认收货，只允许当前用户把已支付订单更新为已完成；已完成订单重复调用按成功处理。
 
-### 4.9 超时关单：延迟消息为主，定时扫描兜底
+> 说明：此前的手工验证接口 `PUT /orders/{id}/paid` 已下线——它允许登录用户绕过支付直接把订单标记为已支付。订单进入已支付状态的唯一入口是 `PaySuccessConsumer` 消费支付成功消息后调用的 `markPaid`，HTTP 层不再暴露。
+
+### 4.8 超时关单：延迟消息为主，定时扫描兜底
 
 **主链路（RabbitMQ 延迟消息）**：订单创建成功后向延迟队列 `inknexus.order.close.delay.queue` 发布关单消息，队列级 TTL 等于 `expire-minutes`，消息到期后经死信交换机 `inknexus.order.close.exchange` 进入关单队列 `inknexus.order.close.queue`；`OrderCloseDelayConsumer` 消费后调用 `closeExpiredOrder` 关单并释放库存。因为所有订单的过期时间统一为 `expire-minutes`，采用队列级 TTL 而非按消息 TTL，规避了单队列内按消息 TTL 的队头阻塞问题。
 
@@ -172,7 +170,7 @@
 订单服务也向支付服务提供内部调用接口：
 
 - `GET /orders/{id}`：校验订单归属并返回订单快照
-- `PUT /orders/{id}/paid`：保留手工验证入口，正常支付链路不再通过它更新订单
+- 订单状态更新不再提供 HTTP 接口：原手工验证接口 `PUT /orders/{id}/paid` 已下线，正常支付链路由订单服务消费 `PaySuccessMessage` 后执行
 
 前端在图书下单和购物车结算时可以选择已保存收货地址自动带入；地址最终仍由订单请求直接携带，尚未拆分为独立地址微服务。下单成功后，前端会清理已下单的购物车条目。
 
@@ -184,6 +182,8 @@
 - `markPaid` 按订单状态做幂等：已支付或已取消的消息不会重复确认库存
 - 订单支付成功后，`OrderEventPublisher` 发布 `OrderStockEvent` 到 `inknexus.order.stock.exchange`
 - 库存服务消费确认或释放事件，异步处理 `locked_stock`
+- 发布端开启 publisher confirm（`RabbitReliabilityConfig` 注册回调），消息未被确认或无法路由时打 error 日志并携带 eventId
+- 业务队列统一挂死信交换机，消费重试 3 次耗尽后进入 `inknexus.dlx.queue` 等待人工处理；存量环境升级需删除旧队列重新声明
 
 ## 8. 验证方式
 
@@ -196,7 +196,6 @@ POST http://localhost:8080/api/orders/from-cart
 GET http://localhost:8080/api/orders
 GET http://localhost:8080/api/orders/1
 PUT http://localhost:8080/api/orders/1/cancel
-PUT http://localhost:8080/api/orders/1/paid
 PUT http://localhost:8080/api/orders/1/complete
 ```
 

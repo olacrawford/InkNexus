@@ -8,7 +8,9 @@
 - 前后端分离：Vue 3 前端通过 Gateway 与各业务服务联通
 - 企业常见基础能力已接入：Nacos、Nacos Config、Gateway、OpenFeign、Redis、Sentinel、RabbitMQ
 - 缓存三级防护：空值缓存防穿透、SETNX 分布式锁互斥重建 + Lua 原子释放防击穿、TTL 随机抖动 + 分级过期防雪崩
-- 网关统一鉴权：JWT 校验 + 用户身份透传（X-User-Id）
+- 订单-库存一致性：SQL 条件更新 + 三态库存防超卖，下单唯一索引、支付状态 CAS、消息 eventId 去重三层幂等，RabbitMQ 延迟消息超时关单、消费重试 + 死信队列 + 发布确认
+- 网关统一鉴权：JWT 校验 + 用户身份/角色透传（X-User-Id / X-User-Role），图书管理接口仅管理员可用
+- 全链路 TraceId：网关生成透传，跨服务日志可串联，异常响应只带 traceId 不泄漏内部信息
 - 接口文档：Knife4j 自动生成在线文档
 - 核心链路可运行：注册、登录、图书浏览、分类查看、购物车结算下单、支付确认库存、订单超时自动取消
 
@@ -70,8 +72,8 @@ Browser
 
 ```text
 前端请求（带 Bearer token）
-  -> 网关 AuthGlobalFilter：校验 JWT → 放行，并把 userId 放入 X-User-Id 头
-  -> 下游服务：从 X-User-Id 拿 userId（前端无法伪造）
+  -> 网关 AuthGlobalFilter：校验 JWT → 放行，并把 userId/role 放入 X-User-Id / X-User-Role 头
+  -> 下游服务：从请求头拿身份与角色（客户端自带的伪造头会被覆盖）
 ```
 
 ## 已完成功能
@@ -84,7 +86,7 @@ Browser
 
 ### 商城侧
 
-- 图书增删改查 + 分页查询
+- 图书增删改查 + 分页查询（写接口仅管理员角色可用）
 - 分类列表（平铺大类，不细分）
 - 购物车页面（加入、数量修改、勾选、删除、清空、结算下单）
 - 图书库存查询、下单预占、支付确认、取消订单释放
@@ -101,7 +103,7 @@ Browser
 - RabbitMQ 支付成功事件发布与消费
 - Redis 缓存图书列表/分页/详情/分类，Sentinel 接口限流
 - 购物车并发加购原子更新、OpenFeign 超时配置、订单查询复合索引
-- 单元测试覆盖全部 9 个后端模块（服务层、网关过滤器、AI 支撑类）
+- 单元测试覆盖全部 9 个后端模块共 76 个用例（服务层、网关过滤器、TraceId、AI 支撑类），不依赖中间件可独立运行
 - 统一返回体与全局异常处理
 
 ## 本地运行说明
@@ -132,9 +134,9 @@ bash scripts/dev-macos.sh
 
 ### 3. 导入数据库
 
-新环境初始化直接执行 [sql/sql.txt](sql/sql.txt) 即可，脚本已包含用户、图书、购物车、库存、订单、支付等全部 9 张表和默认库存。
+新环境初始化直接执行 [sql/sql.txt](sql/sql.txt) 即可，脚本已包含用户、图书、购物车、库存、订单、支付、MQ 消费去重等全部 10 张表和默认库存。
 
-已有环境按顺序执行 `sql/updates/001_cart_address_stock.sql`、`002_stock_order.sql`、`003_payment.sql`、`004_order_expire_stock_confirm.sql`、`005_optimization.sql` 完成增量升级。
+已有环境按顺序执行 `sql/updates/001_cart_address_stock.sql`、`002_stock_order.sql`、`003_payment.sql`、`004_order_expire_stock_confirm.sql`、`005_optimization.sql`、`006_order_request_id.sql`、`007_rename_database_to_inknexus.sql`、`008_user_role.sql`、`009_mq_consumed_log.sql` 完成增量升级。注意：`008` 会把 id=1 的用户提升为管理员，可按需修改；升级到含死信参数的队列版本后需删除旧 RabbitMQ 队列让服务重新声明。
 
 ### 4. 数据库与配置
 

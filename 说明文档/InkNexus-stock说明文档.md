@@ -86,15 +86,11 @@
 
 库存不足时返回业务错误，同一请求内多本书的预占操作会整体回滚。
 
-### 4.4 POST /stock/release
+### 4.4 已下线的调试接口（POST /stock/release、POST /stock/confirm）
 
-释放预占库存，请求体格式与 `/stock/deduct` 一致。
+此前的手工调试接口 `POST /stock/release`、`POST /stock/confirm` 已下线：订单服务实际只通过 MQ 事件触发库存释放与确认，这两个 HTTP 入口允许登录用户绕过订单状态直接篡改库存账目。处理方式与订单服务下线 `PUT /orders/{id}/paid` 一致。
 
-### 4.5 POST /stock/confirm
-
-支付成功后确认库存，请求体格式与 `/stock/deduct` 一致。
-
-预占库存时 `stock` 已经减少并计入 `locked_stock`；确认时只减少 `locked_stock`，不会再次扣减可售库存；手工验证时仍可调用 `/stock/release` 恢复，正常链路通过 RabbitMQ 事件触发。
+预占库存时 `stock` 已经减少并计入 `locked_stock`；确认时只减少 `locked_stock`，不会再次扣减可售库存；正常链路通过 RabbitMQ 事件触发。
 
 ## 5. 数据模型
 
@@ -113,6 +109,7 @@
 - 释放库存按实际 `locked_stock` 恢复；没有锁定库存时视为已释放，保证取消订单和超时关单可重试
 - 库存一致性由这些原子 `UPDATE` 条件保证，`version` 不是乐观锁，仅作为变更计数
 - `StockServiceImpl` 的预占、确认和释放都加 `@Transactional`，多商品操作失败时会在库存服务内回滚
+- 消费幂等：确认/释放消息按 `eventId` 去重（`t_mq_consumed_log` 的唯一键 + `INSERT IGNORE`），去重记录与库存更新同一事务——库存操作回滚时记录一并回滚，消息重投后仍可重试
 - 普通 CRUD 使用 MyBatis-Plus `BaseMapper`，预占/释放等自定义 SQL 放在 `resources/mapper/StockMapper.xml`
 
 ## 7. 订单服务接入
@@ -127,6 +124,8 @@
 - 订单支付成功发布 `OrderStockEvent`，路由键 `order.paid`
 - 订单取消或超时发布 `OrderStockEvent`，路由键 `order.stock.release`
 - 库存服务通过 `@RabbitListener` 消费后调用 `confirm` / `release`
+- 消费失败本地重试 3 次后不再 requeue，经死信交换机进入 `inknexus.dlx.queue` 等待人工处理
+- 注意：业务队列新增了死信参数，存量环境升级时需删除旧队列（`inknexus.stock.order.paid.queue`、`inknexus.stock.order.release.queue`）让服务重新声明
 
 ## 8. 前端接入
 

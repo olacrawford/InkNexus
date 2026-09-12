@@ -12,12 +12,12 @@ The Git root is this directory. The project is named 墨枢 InkNexus; Maven modu
   - `inknexus-stock` (8090): book stock queries, order-time reservation, payment confirmation, and cancellation release.
   - `inknexus-order` (8050): direct/cart orders, paid-stock confirmation, timeout close, and OpenFeign calls to book, cart, and stock services.
   - `inknexus-payment` (8051): mock payment records and order paid-state updates via OpenFeign.
-  - `inknexus-gateway` (8080): routing, JWT validation, and `X-User-Id`.
+  - `inknexus-gateway` (8080): routing, JWT validation, and `X-User-Id` / `X-User-Role` passthrough (book write endpoints require the ADMIN role from the JWT `role` claim); generates/passes `X-Trace-Id` for cross-service log correlation (services write it to MDC via `com.inknexus.common.trace.TraceIdFilter`).
   - `inknexus-ai` (8071): read-only chatbot using LangChain4j + DashScope (Qwen); SSE streaming via `POST /ai/chat/stream` (`TokenStream` + `SseEmitter`, `/ai/chat` is the fallback); session memory in Redis; calls book/order via OpenFeign.
-  - Async flow via RabbitMQ: `inknexus-payment` publishes pay-success events; `inknexus-order` consumes them to mark orders paid; `inknexus-order` and `inknexus-stock` exchange stock confirm/release events; order-timeout close runs on a RabbitMQ TTL+dead-letter delay queue declared in `inknexus-order`'s `RabbitMqConfig` (queue-level TTL = `expire-minutes`; `OrderTimeoutTask` is only a backstop sweep). Producers/consumers live in each module's `mq` package.
+  - Async flow via RabbitMQ: `inknexus-payment` publishes pay-success events; `inknexus-order` consumes them to mark orders paid; `inknexus-order` and `inknexus-stock` exchange stock confirm/release events; order-timeout close runs on a RabbitMQ TTL+dead-letter delay queue declared in `inknexus-order`'s `RabbitMqConfig` (queue-level TTL = `expire-minutes`; `OrderTimeoutTask` is only a backstop sweep). Producers/consumers live in each module's `mq` package. Stock confirm/release consumption is idempotent per message `eventId` via `t_mq_consumed_log` (dedup insert and stock update share one transaction). All business queues carry dead-letter args into `inknexus.dlx.queue` after listener retry exhaustion (`default-requeue-rejected: false`), and publishers register confirm/returns callbacks in each module's `RabbitReliabilityConfig`.
 - REST APIs are documented with Knife4j (springdoc) in each service.
 - `front/`: Vue 3 + Vite app under `front/src/` — axios wrapper and endpoints in `src/api/` (`http.js`, `inknexus.js`, `result.js` for unwrapping `Result`), session helpers in `src/utils/`, views in `src/views/` (Home, Books, Cart, Orders, Address, Login, AiChat).
-- `sql/sql.txt`: complete MySQL schema and seed data, including all 9 tables.
+- `sql/sql.txt`: complete MySQL schema and seed data, including all 10 tables.
 - `sql/updates/`: numbered incremental SQL scripts (`001_*.sql` …) for existing environments.
 - `nacos-config/`: per-service config and `publish.sh`.
 - `docker-compose.infra.yml`: local MySQL, Nacos, Redis, and RabbitMQ for macOS / Docker Desktop.

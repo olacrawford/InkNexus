@@ -102,13 +102,13 @@
 
 支付服务使用 `RabbitTemplate` 发布 JSON 字符串，订单服务通过 `@RabbitListener` 消费。
 
+- 发布端开启 publisher confirm（`RabbitReliabilityConfig` 注册回调），携带 `CorrelationData`（eventId），消息未被确认或无法路由时打 error 日志
+- 队列挂死信交换机，订单侧消费重试耗尽的消息进入 `inknexus.dlx.queue` 等待人工处理
+
 ## 8. 订单服务接入
 
-`inknexus-order` 新增接口：
-
-- `PUT /orders/{id}/paid`：手工验证接口，可把待支付订单更新为已支付
-- 已支付订单再次调用按幂等成功处理
-- 支付服务不再同步调用该接口，正常链路由订单服务消费 `PaySuccessMessage` 后执行
+- 原手工验证接口 `PUT /orders/{id}/paid` 已下线：它允许登录用户绕过支付直接把订单标记为已支付，存在业务漏洞
+- 订单进入已支付状态的唯一入口是订单服务消费 `PaySuccessMessage` 后执行 `markPaid`
 
 支付服务仍通过服务名 `order` 调用 `GET /orders/{id}` 做支付前订单校验。
 
