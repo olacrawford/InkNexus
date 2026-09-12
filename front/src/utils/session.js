@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 
-const SESSION_KEY = 'bookmall_session'
-const TOKEN_KEY = 'bookmall_token'
+const SESSION_KEY = 'inknexus_session'
+const TOKEN_KEY = 'inknexus_token'
 
 // 兼容历史 session 结构，统一归一化成 { token, user: { userId, username, nickname } }
 function normalize(data) {

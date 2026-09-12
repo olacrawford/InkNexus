@@ -49,7 +49,7 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { authApi } from '../api/bookmall'
+import { authApi } from '../api/inknexus'
 import { saveSession } from '../utils/session'
 
 const router = useRouter()

@@ -1,7 +1,7 @@
 # ai-assistant 微服务设计文档（阶段·逐文件施工版）
 
-> 项目：BookMall（Spring Boot 3.2.5 + Spring Cloud 2023.0.2 + Spring Cloud Alibaba 2023.0.1.0 + Nacos + OpenFeign + Redis）
-> 服务：`ai-assistant`｜模块：`bookmall-ai`｜包根：`com.bookmall.ai`
+> 项目：InkNexus（Spring Boot 3.2.5 + Spring Cloud 2023.0.2 + Spring Cloud Alibaba 2023.0.1.0 + Nacos + OpenFeign + Redis）
+> 服务：`ai-assistant`｜模块：`inknexus-ai`｜包根：`com.inknexus.ai`
 > 定位：独立部署、只读不写的 AI 问答服务；用 LangChain4j 接入阿里云通义千问（DashScope）；会话记忆存 Redis。
 > 端口：`8071`
 
@@ -11,12 +11,12 @@
 
 | 阶段 | 要写的文件 | 作用 |
 | --- | --- | --- |
-| 一 骨架 | `BookMall/pom.xml`（改） | 注册模块、锁定 LangChain4j BOM |
-| 一 骨架 | `bookmall-ai/pom.xml` | 模块依赖 |
-| 一 骨架 | `bookmall-ai/src/main/resources/application.yml` | 端口/服务名/Nacos |
+| 一 骨架 | `InkNexus/pom.xml`（改） | 注册模块、锁定 LangChain4j BOM |
+| 一 骨架 | `inknexus-ai/pom.xml` | 模块依赖 |
+| 一 骨架 | `inknexus-ai/src/main/resources/application.yml` | 端口/服务名/Nacos |
 | 一 骨架 | `nacos-config/ai-assistant.yaml` | Redis/Feign/DashScope 配置 |
 | 一 骨架 | `nacos-config/publish.sh`（改） | 发布到 Nacos 的服务列表 |
-| 一 骨架 | `com/bookmall/ai/AiAssistantApplication.java` | 启动类 |
+| 一 骨架 | `com/inknexus/ai/AiAssistantApplication.java` | 启动类 |
 | 二 模型 | `config/AiModelConfig.java` | 构建 DashScope 模型 Bean |
 | 二 模型 | `ai/BookAssistantAiService.java` | `@AiService` + SystemMessage |
 | 三 只读 | `context/UserContextHolder.java` | 保存网关透传的 userId |
@@ -36,7 +36,7 @@
 | 四 编排 | `service/ChatService.java` | 接口 |
 | 四 编排 | `service/impl/ChatServiceImpl.java` | 编排 |
 | 四 编排 | `controller/AiAssistantController.java` | 对外 REST |
-| 五 网关 | `bookmall-gateway/src/main/resources/application.yml`（改） | 加 `/api/ai/**` 路由 |
+| 五 网关 | `inknexus-gateway/src/main/resources/application.yml`（改） | 加 `/api/ai/**` 路由 |
 | 五 网关 | 环境变量 / 启动脚本 | `DASHSCOPE_API_KEY`、运行命令 |
 | 六 验证 | `src/test/.../ResultUtilsTest`、`ChatServiceImplTest` | 联调 + 文档同步 |
 
@@ -46,12 +46,12 @@
 
 **目标**：模块能被父 POM 编译、注册到 Nacos、`/ai/hello` 能通。
 
-## 1.1 改 `BookMall/pom.xml`
+## 1.1 改 `InkNexus/pom.xml`
 
 在 `<modules>` 中加一行：
 
 ```xml
-<module>bookmall-ai</module>
+<module>inknexus-ai</module>
 ```
 
 在 `<properties>` 中加版本：
@@ -74,7 +74,7 @@
 
 > BOM 一旦引入，子模块里 `langchain4j` 系列都不用写版本号。
 
-## 1.2 新建 `BookMall/bookmall-ai/pom.xml`
+## 1.2 新建 `InkNexus/inknexus-ai/pom.xml`
 
 完整文件内容：
 
@@ -86,17 +86,17 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.bookmall</groupId>
-        <artifactId>bookmall</artifactId>
+        <groupId>com.inknexus</groupId>
+        <artifactId>inknexus</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>bookmall-ai</artifactId>
+    <artifactId>inknexus-ai</artifactId>
 
     <dependencies>
         <dependency>
-            <groupId>com.bookmall</groupId>
-            <artifactId>bookmall-common</artifactId>
+            <groupId>com.inknexus</groupId>
+            <artifactId>inknexus-common</artifactId>
         </dependency>
 
         <dependency>
@@ -173,7 +173,7 @@
 </project>
 ```
 
-## 1.3 新建 `bookmall-ai/src/main/resources/application.yml`
+## 1.3 新建 `inknexus-ai/src/main/resources/application.yml`
 
 完整文件内容：
 
@@ -247,18 +247,18 @@ for svc in auth book cart stock order payment gateway ai-assistant; do
 
 发布：`cd nacos-config && bash publish.sh`
 
-## 1.6 新建 `com/bookmall/ai/AiAssistantApplication.java`
+## 1.6 新建 `com/inknexus/ai/AiAssistantApplication.java`
 
 完整文件内容：
 
 ```java
-package com.bookmall.ai;
+package com.inknexus.ai;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
-@SpringBootApplication(scanBasePackages = {"com.bookmall.ai", "com.bookmall.common"})
+@SpringBootApplication(scanBasePackages = {"com.inknexus.ai", "com.inknexus.common"})
 @EnableFeignClients
 public class AiAssistantApplication {
     public static void main(String[] args) {
@@ -267,7 +267,7 @@ public class AiAssistantApplication {
 }
 ```
 
-**这一步怎么验证**：`mvn -f BookMall/pom.xml -q clean package` 编译通过；启动后 Nacos 列表出现 `ai-assistant`；`curl http://localhost:8071/ai/hello` 仍会 404（Controller 在阶段四），可先只确认注册成功。
+**这一步怎么验证**：`mvn -f InkNexus/pom.xml -q clean package` 编译通过；启动后 Nacos 列表出现 `ai-assistant`；`curl http://localhost:8071/ai/hello` 仍会 404（Controller 在阶段四），可先只确认注册成功。
 
 ---
 
@@ -275,12 +275,12 @@ public class AiAssistantApplication {
 
 **目标**：跑通「消息 → 千问 → 回复」。
 
-## 2.1 新建 `com/bookmall/ai/config/AiModelConfig.java`
+## 2.1 新建 `com/inknexus/ai/config/AiModelConfig.java`
 
 完整文件内容：
 
 ```java
-package com.bookmall.ai.config;
+package com.inknexus.ai.config;
 
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
@@ -319,12 +319,12 @@ public class AiModelConfig {
 
 > `api-key` 用的是 `${DASHSCOPE_API_KEY:}`，运行时 `export DASHSCOPE_API_KEY=sk-xxx`，代码里不出现明文。
 
-## 2.2 新建 `com/bookmall/ai/ai/BookAssistantAiService.java`
+## 2.2 新建 `com/inknexus/ai/ai/BookAssistantAiService.java`
 
 完整文件内容（SystemMessage 是下面这段完整文案，直接用）：
 
 ```java
-package com.bookmall.ai.ai;
+package com.inknexus.ai.ai;
 
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
@@ -336,7 +336,7 @@ import dev.langchain4j.service.spring.AiService;
 public interface BookAssistantAiService {
 
     @SystemMessage("""
-        你是「书小助」，BookMall 图书商城智能购物助手。你只能读取和查询数据，绝不能修改任何数据，也绝不能代表用户下单、支付、退款、取消订单或修改收货地址——这些操作你一律拒绝，并建议用户到对应页面操作。
+        你是「书小助」，InkNexus 图书商城智能购物助手。你只能读取和查询数据，绝不能修改任何数据，也绝不能代表用户下单、支付、退款、取消订单或修改收货地址——这些操作你一律拒绝，并建议用户到对应页面操作。
 
         你能做、也仅能做：
         1. 图书咨询：根据书名关键词、作者或分类向用户推荐图书，返回书名、作者、价格、简介和所属分类。
@@ -365,12 +365,12 @@ public interface BookAssistantAiService {
 
 **目标**：模型能搜书、查订单；只查不改。
 
-## 3.1 新建 `com/bookmall/ai/context/UserContextHolder.java`
+## 3.1 新建 `com/inknexus/ai/context/UserContextHolder.java`
 
 完整文件内容：
 
 ```java
-package com.bookmall.ai.context;
+package com.inknexus.ai.context;
 
 public class UserContextHolder {
 
@@ -390,12 +390,12 @@ public class UserContextHolder {
 }
 ```
 
-## 3.2 新建 `com/bookmall/ai/context/UserContextInterceptor.java`
+## 3.2 新建 `com/inknexus/ai/context/UserContextInterceptor.java`
 
 完整文件内容：
 
 ```java
-package com.bookmall.ai.context;
+package com.inknexus.ai.context;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -420,14 +420,14 @@ public class UserContextInterceptor implements HandlerInterceptor {
 }
 ```
 
-## 3.3 新建 `com/bookmall/ai/config/WebMvcConfig.java`
+## 3.3 新建 `com/inknexus/ai/config/WebMvcConfig.java`
 
 完整文件内容：
 
 ```java
-package com.bookmall.ai.config;
+package com.inknexus.ai.config;
 
-import com.bookmall.ai.context.UserContextInterceptor;
+import com.inknexus.ai.context.UserContextInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -442,14 +442,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
 }
 ```
 
-## 3.4 新建 `com/bookmall/ai/config/FeignAuthConfig.java`
+## 3.4 新建 `com/inknexus/ai/config/FeignAuthConfig.java`
 
 完整文件内容（把 ThreadLocal 里的 userId 写进 Feign 请求头）：
 
 ```java
-package com.bookmall.ai.config;
+package com.inknexus.ai.config;
 
-import com.bookmall.ai.context.UserContextHolder;
+import com.inknexus.ai.context.UserContextHolder;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 import org.springframework.context.annotation.Bean;
@@ -472,12 +472,12 @@ public class FeignAuthConfig {
 
 > 关键点：order 的列表/详情接口都要求 `@RequestHeader("X-User-Id")`。这里从网关透传的线程身份取值，**绝不把 userId 交给模型或工具方法参数**。
 
-## 3.5 新建 5 个 DTO（`com/bookmall/ai/feign/dto/`）
+## 3.5 新建 5 个 DTO（`com/inknexus/ai/feign/dto/`）
 
 `BookSnapshot.java`（覆盖 BookVO + BookDetailVO 字段，未返回字段自动为 null）：
 
 ```java
-package com.bookmall.ai.feign.dto;
+package com.inknexus.ai.feign.dto;
 
 import lombok.Data;
 
@@ -499,7 +499,7 @@ public class BookSnapshot {
 `CategorySnapshot.java`：
 
 ```java
-package com.bookmall.ai.feign.dto;
+package com.inknexus.ai.feign.dto;
 
 import lombok.Data;
 
@@ -514,7 +514,7 @@ public class CategorySnapshot {
 `OrderSnapshot.java`：
 
 ```java
-package com.bookmall.ai.feign.dto;
+package com.inknexus.ai.feign.dto;
 
 import lombok.Data;
 
@@ -536,7 +536,7 @@ public class OrderSnapshot {
 `OrderItemSnapshot.java`：
 
 ```java
-package com.bookmall.ai.feign.dto;
+package com.inknexus.ai.feign.dto;
 
 import lombok.Data;
 
@@ -555,7 +555,7 @@ public class OrderItemSnapshot {
 `OrderDetailSnapshot.java`：
 
 ```java
-package com.bookmall.ai.feign.dto;
+package com.inknexus.ai.feign.dto;
 
 import lombok.Data;
 
@@ -580,17 +580,17 @@ public class OrderDetailSnapshot {
 
 > 镜像字段来自 order 的 `OrderDetailVO.OrderItemVO`：`bookId/bookTitle/bookPrice/quantity/subtotal`。
 
-## 3.6 新建 `com/bookmall/ai/feign/BookFeignClient.java`
+## 3.6 新建 `com/inknexus/ai/feign/BookFeignClient.java`
 
 完整文件内容：
 
 ```java
-package com.bookmall.ai.feign;
+package com.inknexus.ai.feign;
 
-import com.bookmall.ai.feign.dto.BookSnapshot;
-import com.bookmall.ai.feign.dto.CategorySnapshot;
-import com.bookmall.common.result.PageResult;
-import com.bookmall.common.result.Result;
+import com.inknexus.ai.feign.dto.BookSnapshot;
+import com.inknexus.ai.feign.dto.CategorySnapshot;
+import com.inknexus.common.result.PageResult;
+import com.inknexus.common.result.Result;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -616,16 +616,16 @@ public interface BookFeignClient {
 }
 ```
 
-## 3.7 新建 `com/bookmall/ai/feign/OrderFeignClient.java`
+## 3.7 新建 `com/inknexus/ai/feign/OrderFeignClient.java`
 
 完整文件内容：
 
 ```java
-package com.bookmall.ai.feign;
+package com.inknexus.ai.feign;
 
-import com.bookmall.ai.feign.dto.OrderDetailSnapshot;
-import com.bookmall.ai.feign.dto.OrderSnapshot;
-import com.bookmall.common.result.Result;
+import com.inknexus.ai.feign.dto.OrderDetailSnapshot;
+import com.inknexus.ai.feign.dto.OrderSnapshot;
+import com.inknexus.common.result.Result;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -643,16 +643,16 @@ public interface OrderFeignClient {
 }
 ```
 
-## 3.8 新建 `com/bookmall/ai/support/ResultUtils.java`
+## 3.8 新建 `com/inknexus/ai/support/ResultUtils.java`
 
 解包公共 `Result` / `PageResult`，非 200 抛 `BusinessException`：
 
 ```java
-package com.bookmall.ai.support;
+package com.inknexus.ai.support;
 
-import com.bookmall.common.constant.ErrorCode;
-import com.bookmall.common.exception.BusinessException;
-import com.bookmall.common.result.Result;
+import com.inknexus.common.constant.ErrorCode;
+import com.inknexus.common.exception.BusinessException;
+import com.inknexus.common.result.Result;
 
 public class ResultUtils {
 
@@ -671,18 +671,18 @@ public class ResultUtils {
 }
 ```
 
-## 3.9 新建 `com/bookmall/ai/tool/QueryBookTool.java`
+## 3.9 新建 `com/inknexus/ai/tool/QueryBookTool.java`
 
 完整文件内容：
 
 ```java
-package com.bookmall.ai.tool;
+package com.inknexus.ai.tool;
 
-import com.bookmall.ai.feign.BookFeignClient;
-import com.bookmall.ai.feign.dto.BookSnapshot;
-import com.bookmall.ai.feign.dto.CategorySnapshot;
-import com.bookmall.ai.support.ResultUtils;
-import com.bookmall.common.result.PageResult;
+import com.inknexus.ai.feign.BookFeignClient;
+import com.inknexus.ai.feign.dto.BookSnapshot;
+import com.inknexus.ai.feign.dto.CategorySnapshot;
+import com.inknexus.ai.support.ResultUtils;
+import com.inknexus.common.result.PageResult;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
@@ -743,18 +743,18 @@ public class QueryBookTool {
 }
 ```
 
-## 3.10 新建 `com/bookmall/ai/tool/QueryOrderTool.java`
+## 3.10 新建 `com/inknexus/ai/tool/QueryOrderTool.java`
 
 完整文件内容（userId 来自 `UserContextHolder`，**方法里没有 userId 参数**，避免模型伪造他人身份）：
 
 ```java
-package com.bookmall.ai.tool;
+package com.inknexus.ai.tool;
 
-import com.bookmall.ai.feign.OrderFeignClient;
-import com.bookmall.ai.feign.dto.OrderDetailSnapshot;
-import com.bookmall.ai.feign.dto.OrderItemSnapshot;
-import com.bookmall.ai.feign.dto.OrderSnapshot;
-import com.bookmall.ai.support.ResultUtils;
+import com.inknexus.ai.feign.OrderFeignClient;
+import com.inknexus.ai.feign.dto.OrderDetailSnapshot;
+import com.inknexus.ai.feign.dto.OrderItemSnapshot;
+import com.inknexus.ai.feign.dto.OrderSnapshot;
+import com.inknexus.ai.support.ResultUtils;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
@@ -833,12 +833,12 @@ public class QueryOrderTool {
 
 本模块不单独建 `RedisConfig`，直接用 Spring Boot 自动装配的 `StringRedisTemplate`（`spring-boot-starter-data-redis` 已提供）。会话记忆由 `RedisChatMemoryStore` 手动以 JSON 数组落库，控制序列化格式、避免依赖内部消息类的默认序列化。
 
-## 4.2 新建 `com/bookmall/ai/support/RedisChatMemoryStore.java`
+## 4.2 新建 `com/inknexus/ai/support/RedisChatMemoryStore.java`
 
 把 LangChain4j 的 `ChatMemoryStore` 落到 Redis，key = `chat:memory:{memoryId}`，带 TTL。存储格式为 `[{"type":"USER|AI|SYSTEM","text":"..."}]`：
 
 ```java
-package com.bookmall.ai.support;
+package com.inknexus.ai.support;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;
@@ -928,12 +928,12 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
 }
 ```
 
-## 4.3 新建 `com/bookmall/ai/config/ChatMemoryConfig.java`
+## 4.3 新建 `com/inknexus/ai/config/ChatMemoryConfig.java`
 
 ```java
-package com.bookmall.ai.config;
+package com.inknexus.ai.config;
 
-import com.bookmall.ai.support.RedisChatMemoryStore;
+import com.inknexus.ai.support.RedisChatMemoryStore;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
@@ -964,10 +964,10 @@ public class ChatMemoryConfig {
 }
 ```
 
-## 4.4 新建 `com/bookmall/ai/dto/ChatRequest.java`
+## 4.4 新建 `com/inknexus/ai/dto/ChatRequest.java`
 
 ```java
-package com.bookmall.ai.dto;
+package com.inknexus.ai.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
@@ -981,10 +981,10 @@ public class ChatRequest {
 }
 ```
 
-## 4.5 新建 `com/bookmall/ai/dto/ChatResponse.java`
+## 4.5 新建 `com/inknexus/ai/dto/ChatResponse.java`
 
 ```java
-package com.bookmall.ai.dto;
+package com.inknexus.ai.dto;
 
 import lombok.Data;
 
@@ -1002,28 +1002,28 @@ public class ChatResponse {
 }
 ```
 
-## 4.6 新建 `com/bookmall/ai/service/ChatService.java`
+## 4.6 新建 `com/inknexus/ai/service/ChatService.java`
 
 ```java
-package com.bookmall.ai.service;
+package com.inknexus.ai.service;
 
-import com.bookmall.ai.dto.ChatRequest;
-import com.bookmall.ai.dto.ChatResponse;
+import com.inknexus.ai.dto.ChatRequest;
+import com.inknexus.ai.dto.ChatResponse;
 
 public interface ChatService {
     ChatResponse chat(Long userId, ChatRequest request);
 }
 ```
 
-## 4.7 新建 `com/bookmall/ai/service/impl/ChatServiceImpl.java`
+## 4.7 新建 `com/inknexus/ai/service/impl/ChatServiceImpl.java`
 
 ```java
-package com.bookmall.ai.service.impl;
+package com.inknexus.ai.service.impl;
 
-import com.bookmall.ai.ai.BookAssistantAiService;
-import com.bookmall.ai.dto.ChatRequest;
-import com.bookmall.ai.dto.ChatResponse;
-import com.bookmall.ai.service.ChatService;
+import com.inknexus.ai.ai.BookAssistantAiService;
+import com.inknexus.ai.dto.ChatRequest;
+import com.inknexus.ai.dto.ChatResponse;
+import com.inknexus.ai.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -1048,15 +1048,15 @@ public class ChatServiceImpl implements ChatService {
 }
 ```
 
-## 4.8 新建 `com/bookmall/ai/controller/AiAssistantController.java`
+## 4.8 新建 `com/inknexus/ai/controller/AiAssistantController.java`
 
 ```java
-package com.bookmall.ai.controller;
+package com.inknexus.ai.controller;
 
-import com.bookmall.ai.dto.ChatRequest;
-import com.bookmall.ai.dto.ChatResponse;
-import com.bookmall.ai.service.ChatService;
-import com.bookmall.common.result.Result;
+import com.inknexus.ai.dto.ChatRequest;
+import com.inknexus.ai.dto.ChatResponse;
+import com.inknexus.ai.service.ChatService;
+import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -1089,7 +1089,7 @@ public class AiAssistantController {
 
 **目标**：外部可访问、配置可发布、运行合规。
 
-## 5.1 改 `bookmall-gateway/src/main/resources/application.yml`
+## 5.1 改 `inknexus-gateway/src/main/resources/application.yml`
 
 在 `spring.cloud.gateway.routes` 列表末尾追加：
 
@@ -1115,8 +1115,8 @@ export DASHSCOPE_API_KEY='sk-xxxx'
 先启动 auth / book / cart / stock / order / payment / gateway，再：
 
 ```bash
-mvn -f BookMall/pom.xml -DskipTests install
-mvn -f BookMall/pom.xml -pl bookmall-ai spring-boot:run
+mvn -f InkNexus/pom.xml -DskipTests install
+mvn -f InkNexus/pom.xml -pl inknexus-ai spring-boot:run
 ```
 
 > `spring-boot:run` 不要加 `-am`（否则会一起启动父 POM）。
@@ -1127,7 +1127,7 @@ mvn -f BookMall/pom.xml -pl bookmall-ai spring-boot:run
 
 ## 6.1 验证清单（按序执行）
 
-1. `mvn -f BookMall/pom.xml -q clean package` 全量编译通过。
+1. `mvn -f InkNexus/pom.xml -q clean package` 全量编译通过。
 2. 依次启动各服务（含 ai-assistant）。
 3. `GET /api/ai/hello`（不带 token）→ 返回健康文本。
 4. 带 JWT `POST /api/ai/chat`：问「推荐几本 AI 相关书籍」→ 校验 book 回源。
@@ -1193,11 +1193,11 @@ mvn -f BookMall/pom.xml -pl bookmall-ai spring-boot:run
 
 # 附录 C：实施落地状态
 
-以下设计已在 `BookMall/bookmall-ai` 落地并通过编译与单测，文档与实现一致。
+以下设计已在 `InkNexus/inknexus-ai` 落地并通过编译与单测，文档与实现一致。
 
 ## C.1 已落地文件
 
-- 工程：`bookmall-ai/pom.xml`、`src/main/resources/application.yml`
+- 工程：`inknexus-ai/pom.xml`、`src/main/resources/application.yml`
 - 启动：`AiAssistantApplication.java`
 - 模型：`config/AiModelConfig.java`
 - AI 服务：`ai/BookAssistantAiService.java`
@@ -1209,13 +1209,13 @@ mvn -f BookMall/pom.xml -pl bookmall-ai spring-boot:run
 - 接口：`controller/AiAssistantController.java`
 - 公共：`support/ResultUtils.java`、`dto/ChatRequest.java`、`dto/ChatResponse.java`
 - 配置：`nacos-config/ai-assistant.yaml`、`nacos-config/publish.sh`、Gateway 路由
-- 测试：`src/test/java/com/bookmall/ai/support/ResultUtilsTest.java`、`src/test/java/com/bookmall/ai/service/impl/ChatServiceImplTest.java`
-- 前端：`front/src/views/AiChatView.vue`、`front/src/api/bookmall.js`（`aiApi`）、`front/src/router/index.js`（`/ai` 路由）、`front/src/App.vue`（侧边栏「AI 助手」）
+- 测试：`src/test/java/com/inknexus/ai/support/ResultUtilsTest.java`、`src/test/java/com/inknexus/ai/service/impl/ChatServiceImplTest.java`
+- 前端：`front/src/views/AiChatView.vue`、`front/src/api/inknexus.js`（`aiApi`）、`front/src/router/index.js`（`/ai` 路由）、`front/src/App.vue`（侧边栏「AI 助手」）
 
 ## C.2 验证结果
 
-- 模块单测：`mvn -f BookMall/pom.xml -pl bookmall-ai -am test` ✅ 通过
-- 全量编译：`mvn -f BookMall/pom.xml -DskipTests clean package` ✅ 通过
+- 模块单测：`mvn -f InkNexus/pom.xml -pl inknexus-ai -am test` ✅ 通过
+- 全量编译：`mvn -f InkNexus/pom.xml -DskipTests clean package` ✅ 通过
 - 前端构建：`cd front && npm run build` ✅ 通过
 - 联调冒烟：Vite dev(5173) + mock 网关(8080)，`/ai` 页发送消息 → 用户气泡 + 助手回复气泡正常；停掉网关后再发消息 → 出现 `.alert` 错误提示 + 兜底回复气泡 ✅
 
@@ -1223,8 +1223,8 @@ mvn -f BookMall/pom.xml -pl bookmall-ai spring-boot:run
 
 ```bash
 export DASHSCOPE_API_KEY='sk-你的通义千问Key'
-mvn -f BookMall/pom.xml -DskipTests install
-mvn -f BookMall/pom.xml -pl bookmall-ai spring-boot:run
+mvn -f InkNexus/pom.xml -DskipTests install
+mvn -f InkNexus/pom.xml -pl inknexus-ai spring-boot:run
 ```
 
 先启动 auth / book / cart / stock / order / payment / gateway，再启动 ai-assistant。
@@ -1242,15 +1242,15 @@ mvn -f BookMall/pom.xml -pl bookmall-ai spring-boot:run
 
 - 消息区：用户气泡（右侧，强调色）、助手气泡（左侧，浅色）
 - 发送：输入框填写 → 回车/点「发送」→ 调用 `POST /api/ai/chat`
-- 会话：`conversationId` 存在 `localStorage.bookmall_ai_conversation`，缺省自动生成
+- 会话：`conversationId` 存在 `localStorage.inknexus_ai_conversation`，缺省自动生成
 - 快捷提问：空白状态展示「推荐几本关于AI的书 / 查一下我的订单 / 有哪些图书分类」
 - 「新对话」：清空会话键与消息
 - 失败兜底：请求异常时展示 `.alert` 错误提示 + 助手兜底气泡
 
 ## D.3 API
 
-- `front/src/api/bookmall.js` 新增 `aiApi.chat({ message, conversationId })`、`aiApi.hello()`
+- `front/src/api/inknexus.js` 新增 `aiApi.chat({ message, conversationId })`、`aiApi.hello()`
 - `/api` 由 Vite 代理到网关 `8080`，网关 `POST /api/ai/chat` → `POST /ai/chat`
 
 ---
-*本文档为设计说明；实现已落地，对应代码见 `BookMall/bookmall-ai`。*
+*本文档为设计说明；实现已落地，对应代码见 `InkNexus/inknexus-ai`。*

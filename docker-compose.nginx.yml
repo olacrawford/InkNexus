@@ -1,11 +1,11 @@
 version: '3.9'
 
 services:
-  bookmall-nginx:
+  inknexus-nginx:
     build:
       context: ./front
       dockerfile: Dockerfile
-    container_name: bookmall-nginx
+    container_name: inknexus-nginx
     ports:
       - "80:80"
     extra_hosts:

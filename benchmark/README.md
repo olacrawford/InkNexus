@@ -22,7 +22,7 @@ jmeter -n -t benchmark/book-list.jmx \
 1. **热缓存（命中 Redis）**：先预热——用浏览器或 `curl 'http://localhost:8080/api/books/page?pageNum=1&pageSize=8'` 请求几次，再启动上面的命令。
 2. **冷缓存（未命中）**：先清空 book 服务的缓存再立刻压测：
    ```bash
-   docker exec -it bookmall-redis redis-cli -a 123455 -n 0 FLUSHDB
+   docker exec -it inknexus-redis redis-cli -a 123455 -n 0 FLUSHDB
    ```
    （容器名/密码以 `docker-compose.infra.yml` 与 `nacos-config/book.yaml` 为准；TTL 为 30 分钟，清空后第一轮请求全部回源 MySQL。）
 3. 两次结果的 QPS 与 P95 差值就是缓存收益，写入简历数字。
@@ -66,4 +66,4 @@ jmeter -n -t benchmark/order-create.jmx \
 
 ## 结果怎么读
 
-`-e -o` 生成的 HTML 报告里重点看：**吞吐量（QPS）、平均值、中位数、90%/95%/99% 百分位、错误率**。把数字填进 `说明文档/BookMall-压测报告.md`，再挑最有说服力的一组写进 README 项目亮点和简历。
+`-e -o` 生成的 HTML 报告里重点看：**吞吐量（QPS）、平均值、中位数、90%/95%/99% 百分位、错误率**。把数字填进 `说明文档/InkNexus-压测报告.md`，再挑最有说服力的一组写进 README 项目亮点和简历。

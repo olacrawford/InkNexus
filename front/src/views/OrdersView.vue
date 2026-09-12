@@ -46,7 +46,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { orderApi, paymentApi } from '../api/bookmall'
+import { orderApi, paymentApi } from '../api/inknexus'
 import { getCurrentUser } from '../utils/session'
 
 const orders = ref([])

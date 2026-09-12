@@ -1,4 +1,4 @@
-USE bookmall;
+USE inknexus;
 
 -- 004_order_expire_stock_confirm.sql
 -- 为订单增加过期时间，支付服务确认库存后仍由 t_book_stock 维护库存：

@@ -1,4 +1,4 @@
-USE bookmall;
+USE inknexus;
 
 -- 用户表
 DROP TABLE IF EXISTS t_user;

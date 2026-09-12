@@ -1,6 +1,6 @@
--- BookMall 优化升级 005
+-- InkNexus 优化升级 005
 -- 1. 订单列表查询使用 (user_id, create_time) 复合索引
-USE bookmall;
+USE inknexus;
 
 ALTER TABLE t_order
     DROP INDEX idx_user_id,

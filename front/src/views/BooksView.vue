@@ -97,7 +97,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { addressApi, bookApi, cartApi, newRequestId, orderApi, stockApi } from '../api/bookmall'
+import { addressApi, bookApi, cartApi, newRequestId, orderApi, stockApi } from '../api/inknexus'
 import { getCurrentUser } from '../utils/session'
 
 const books = ref([])

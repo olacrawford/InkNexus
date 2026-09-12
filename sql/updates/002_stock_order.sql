@@ -1,6 +1,6 @@
-USE bookmall;
+USE inknexus;
 
--- 002_stock_order.sql：bookmall-stock 接入订单时的增量脚本
+-- 002_stock_order.sql：inknexus-stock 接入订单时的增量脚本
 -- 仅给 t_book 中还没有库存记录的书补齐默认库存，可重复执行。
 
 INSERT INTO t_book_stock (book_id, stock, locked_stock, version)

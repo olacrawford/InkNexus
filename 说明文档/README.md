@@ -1,4 +1,4 @@
-# 墨枢 InkNexus（BookMall）说明文档
+# 墨枢 InkNexus 说明文档
 
 > 本文档目录按模块与横向能力组织，随项目进度同步更新。所有文档均为「当前已实现」口径。
 
@@ -6,29 +6,29 @@
 
 | 文档 | 说明 |
 | --- | --- |
-| [BookMall-auth说明文档.md](BookMall-auth说明文档.md) | 注册、登录、地址管理模块 |
-| [BookMall-book说明文档.md](BookMall-book说明文档.md) | 图书、分类、Redis 缓存、Sentinel 模块 |
-| [BookMall-cart说明文档.md](BookMall-cart说明文档.md) | 购物车模块 |
-| [BookMall-stock说明文档.md](BookMall-stock说明文档.md) | 库存预占、取消释放模块 |
-| [BookMall-order说明文档.md](BookMall-order说明文档.md) | 下单、订单管理、MQ 事件模块 |
-| [BookMall-payment说明文档.md](BookMall-payment说明文档.md) | 支付单、模拟支付、支付结果事件 |
-| [BookMall-gateway说明文档.md](BookMall-gateway说明文档.md) | 网关路由、JWT 鉴权、跨域、`X-User-Id` 透传 |
-| [BookMall-ai-assistant说明文档.md](BookMall-ai-assistant说明文档.md) | AI 只读问答助手（LangChain4j + DashScope） |
+| [InkNexus-auth说明文档.md](InkNexus-auth说明文档.md) | 注册、登录、地址管理模块 |
+| [InkNexus-book说明文档.md](InkNexus-book说明文档.md) | 图书、分类、Redis 缓存、Sentinel 模块 |
+| [InkNexus-cart说明文档.md](InkNexus-cart说明文档.md) | 购物车模块 |
+| [InkNexus-stock说明文档.md](InkNexus-stock说明文档.md) | 库存预占、取消释放模块 |
+| [InkNexus-order说明文档.md](InkNexus-order说明文档.md) | 下单、订单管理、MQ 事件模块 |
+| [InkNexus-payment说明文档.md](InkNexus-payment说明文档.md) | 支付单、模拟支付、支付结果事件 |
+| [InkNexus-gateway说明文档.md](InkNexus-gateway说明文档.md) | 网关路由、JWT 鉴权、跨域、`X-User-Id` 透传 |
+| [InkNexus-ai-assistant说明文档.md](InkNexus-ai-assistant说明文档.md) | AI 只读问答助手（LangChain4j + DashScope） |
 
 ## 二、能力与部署说明
 
 | 文档 | 说明 |
 | --- | --- |
-| [BookMall-数据库设计说明.md](BookMall-数据库设计说明.md) | 表结构、索引与初始化脚本说明 |
-| [BookMall-基础设施搭建说明.md](BookMall-基础设施搭建说明.md) | 中间件（MySQL/Nacos/Redis/RabbitMQ）、模块端口、启动顺序 |
-| [BookMall-增强项实施说明.md](BookMall-增强项实施说明.md) | Redis 缓存、Sentinel、MQ 最终一致性、单元测试、AI 助手横向能力 |
-| [BookMall-Nginx部署说明.md](BookMall-Nginx部署说明.md) | Nginx 反向代理与前端部署 |
+| [InkNexus-数据库设计说明.md](InkNexus-数据库设计说明.md) | 表结构、索引与初始化脚本说明 |
+| [InkNexus-基础设施搭建说明.md](InkNexus-基础设施搭建说明.md) | 中间件（MySQL/Nacos/Redis/RabbitMQ）、模块端口、启动顺序 |
+| [InkNexus-增强项实施说明.md](InkNexus-增强项实施说明.md) | Redis 缓存、Sentinel、MQ 最终一致性、单元测试、AI 助手横向能力 |
+| [InkNexus-Nginx部署说明.md](InkNexus-Nginx部署说明.md) | Nginx 反向代理与前端部署 |
 
 ## 三、演进规划
 
 | 文档 | 说明 |
 | --- | --- |
-| [BookMall-改进方案.md](BookMall-改进方案.md) | P0~P3 演进路线：安全、可靠性、工程化、可观测性与功能增强（规划口径） |
+| [InkNexus-改进方案.md](InkNexus-改进方案.md) | P0~P3 演进路线：安全、可靠性、工程化、可观测性与功能增强（规划口径） |
 
 ## 四、相关设计文档
 

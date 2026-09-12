@@ -83,7 +83,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { addressApi } from '../api/bookmall'
+import { addressApi } from '../api/inknexus'
 
 const addresses = ref([])
 const loading = ref(false)

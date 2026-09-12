@@ -1,4 +1,4 @@
-USE bookmall;
+USE inknexus;
 
 -- 支付单表：当前使用内部模拟支付，先落支付单，再把订单更新为已支付
 CREATE TABLE IF NOT EXISTS t_payment (

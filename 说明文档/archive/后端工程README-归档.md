@@ -1,10 +1,10 @@
-# BookMall 项目说明文档
+# InkNexus 项目说明文档
 
 > 一个基于 Spring Cloud Alibaba 的微服务图书商城项目，当前保留用户、图书、购物车、库存、支付、订单六个核心业务服务 + AI 问答助手、网关与公共模块，前后端主链路已跑通，适合作为微服务课程设计、毕业设计或个人作品集项目。
 
 ## 项目定位
 
-BookMall 是一个围绕图书商城业务拆分的前后端分离项目，目标不是只完成接口演示，而是尽量贴近真实企业项目中的分层、服务拆分和基础设施接入方式。
+InkNexus 是一个围绕图书商城业务拆分的前后端分离项目，目标不是只完成接口演示，而是尽量贴近真实企业项目中的分层、服务拆分和基础设施接入方式。
 
 它目前更适合用于：
 
@@ -41,15 +41,15 @@ BookMall 是一个围绕图书商城业务拆分的前后端分离项目，目�
 
 | 模块 | 端口 | 职责 |
 |---|---:|---|
-| `bookmall-common` | - | 公共返回体、错误码、异常处理、分页对象 |
-| `bookmall-gateway` | 8080 | 统一入口、路由转发、JWT 鉴权、跨域 |
-| `bookmall-auth` | 8060 | 注册、登录、收货地址管理 |
-| `bookmall-book` | 8070 | 图书增删改查、分页、分类 |
-| `bookmall-cart` | 8083 | 购物车增加、查询、修改、删除、清空、结算 |
-| `bookmall-stock` | 8090 | 库存查询、下单预占、支付确认、取消释放 |
-| `bookmall-order` | 8050 | 订单（直接下单、购物车下单、列表、详情、取消、超时自动关单） |
-| `bookmall-payment` | 8051 | 支付单、内部模拟支付、发布支付成功事件触发订单异步更新与库存确认 |
-| `bookmall-ai` | 8071 | AI 问答助手：LangChain4j + DashScope 通义千问，只读调用图书/订单，会话记忆存 Redis |
+| `inknexus-common` | - | 公共返回体、错误码、异常处理、分页对象 |
+| `inknexus-gateway` | 8080 | 统一入口、路由转发、JWT 鉴权、跨域 |
+| `inknexus-auth` | 8060 | 注册、登录、收货地址管理 |
+| `inknexus-book` | 8070 | 图书增删改查、分页、分类 |
+| `inknexus-cart` | 8083 | 购物车增加、查询、修改、删除、清空、结算 |
+| `inknexus-stock` | 8090 | 库存查询、下单预占、支付确认、取消释放 |
+| `inknexus-order` | 8050 | 订单（直接下单、购物车下单、列表、详情、取消、超时自动关单） |
+| `inknexus-payment` | 8051 | 支付单、内部模拟支付、发布支付成功事件触发订单异步更新与库存确认 |
+| `inknexus-ai` | 8071 | AI 问答助手：LangChain4j + DashScope 通义千问，只读调用图书/订单，会话记忆存 Redis |
 | `front` | 5173 | 前端，Vite 托管 |
 
 ## 项目亮点
@@ -94,7 +94,7 @@ BookMall 是一个围绕图书商城业务拆分的前后端分离项目，目�
 
 ### 2. 初始化数据库
 
-执行脚本 [sql/sql.txt](../sql/sql.txt)，会创建数据库 `bookmall` 及全部 9 张表：
+执行脚本 [sql/sql.txt](../sql/sql.txt)，会创建数据库 `inknexus` 及全部 9 张表：
 
 - `t_user`（用户）
 - `t_category`（分类，平铺大类）
@@ -126,20 +126,20 @@ docker compose -f docker-compose.infra.yml up -d
 bash scripts/dev-macos.sh
 ```
 
-2. 启动 `bookmall-auth`（8060）
-3. 启动 `bookmall-book`（8070）
-4. 启动 `bookmall-cart`（8083）
-5. 启动 `bookmall-stock`（8090）
-6. 启动 `bookmall-order`（8050）
-7. 启动 `bookmall-payment`（8051）
-8. 启动 `bookmall-gateway`（8080）
-9. 启动 `bookmall-ai`（8071，可选，AI 问答助手）
+2. 启动 `inknexus-auth`（8060）
+3. 启动 `inknexus-book`（8070）
+4. 启动 `inknexus-cart`（8083）
+5. 启动 `inknexus-stock`（8090）
+6. 启动 `inknexus-order`（8050）
+7. 启动 `inknexus-payment`（8051）
+8. 启动 `inknexus-gateway`（8080）
+9. 启动 `inknexus-ai`（8071，可选，AI 问答助手）
 
-启动 `bookmall-book` 时如遇 Sentinel 日志目录不可写：
+启动 `inknexus-book` 时如遇 Sentinel 日志目录不可写：
 
 ```bash
 mkdir -p logs/sentinel
-mvn -f BookMall/pom.xml -pl bookmall-book spring-boot:run "-Dspring-boot.run.jvmArguments=-Dcsp.sentinel.log.dir=${PWD}/logs/sentinel"
+mvn -f InkNexus/pom.xml -pl inknexus-book spring-boot:run "-Dspring-boot.run.jvmArguments=-Dcsp.sentinel.log.dir=${PWD}/logs/sentinel"
 ```
 
 ### 4. 前端运行
@@ -211,7 +211,7 @@ docker exec -it redis redis-cli --scan --pattern 'category*'
 
 ## 关键实现
 
-### `bookmall-common`
+### `inknexus-common`
 
 - `Result<T>`：统一返回体 `{code, message, data}`
 - `ErrorCode`：统一错误码
@@ -219,18 +219,18 @@ docker exec -it redis redis-cli --scan --pattern 'category*'
 - `GlobalExceptionHandler`：全局异常转 `Result`
 - `PageResult<T>`：分页返回对象（records/total/pages/current/size）
 
-### `bookmall-gateway`
+### `inknexus-gateway`
 
 - `lb://` 路由到各服务，`StripPrefix=1` 去掉 `/api` 前缀
 - `AuthGlobalFilter`：全局过滤器，校验 JWT 签名与过期时间，把 `userId` 放入 `X-User-Id` 头透传；登录/注册/`hello` 接口放行
 - 全局跨域已配置
 
-### `bookmall-auth`
+### `inknexus-auth`
 
 - `POST /auth/register`：注册，BCrypt 加密密码
 - `POST /auth/login`：登录，校验密码后签发 JWT
 
-### `bookmall-book`
+### `inknexus-book`
 
 - `GET /books`、`GET /books/{id}`：查询列表 / 详情
 - `GET /books/page`：分页（支持书名关键字 + 分类精确筛选）
@@ -240,7 +240,7 @@ docker exec -it redis redis-cli --scan --pattern 'category*'
 - Redis 缓存：图书列表、分页、详情、分类缓存到 Redis，缓存统一 30 分钟过期，图书增删改时清理详情和列表缓存
 - Sentinel 限流：`listBooks` 50 QPS、`pageBooks` 80 QPS、`getBookById` 120 QPS、`listCategories` 80 QPS，超限返回友好提示
 
-### `bookmall-order`
+### `inknexus-order`
 
 - `POST /orders`：直接下单（Feign 调图书服务拿价格 → 预占库存 → 落订单 + 明细快照）
 - `POST /orders/from-cart`：购物车已选条目下单（Feign 调购物车、图书和库存服务 → 预占库存 → 创建多明细订单）
@@ -248,13 +248,13 @@ docker exec -it redis redis-cli --scan --pattern 'category*'
 - `GET /orders/{id}`、`PUT /orders/{id}/cancel`：详情 / 取消（取消时释放库存，含越权校验）
 - `PUT /orders/{id}/paid`：保留手工验证入口，正常支付链路由 RabbitMQ 消费触发
 - `PUT /orders/{id}/complete`：确认收货，已支付订单更新为已完成，含越权校验和幂等处理
-- `@RabbitListener` 消费 `bookmall.order.pay.success.queue`，重复消息按订单幂等处理
+- `@RabbitListener` 消费 `inknexus.order.pay.success.queue`，重复消息按订单幂等处理
 - `OrderEventPublisher` 发布订单支付/库存释放事件给库存服务
 - 定时任务：扫描并关闭超过 `expire_time` 的待支付订单，释放预占库存
-- 超时任务每次最多处理 `bookmall.order.close-batch-size=500` 条，避免单轮扫描堆积任务
+- 超时任务每次最多处理 `inknexus.order.close-batch-size=500` 条，避免单轮扫描堆积任务
 - userId 从网关透传的 `X-User-Id` 头获取
 
-### `bookmall-stock`
+### `inknexus-stock`
 
 - `GET /stock/{bookId}`：查询可售库存与锁定库存
 - `POST /stock/deduct`：下单前原子预占库存，防止并发超卖
@@ -262,15 +262,15 @@ docker exec -it redis redis-cli --scan --pattern 'category*'
 - `POST /stock/confirm`：保留手工接口，正常支付由 RabbitMQ 事件触发
 - 使用 `t_book_stock` 的 `stock / locked_stock / version` 字段维护库存状态
 
-### `bookmall-payment`
+### `inknexus-payment`
 
 - `POST /payment/pay`：内部模拟支付，校验订单后生成支付单并发布支付成功事件
 - `GET /payment/order/{orderId}`：查询订单对应的支付单
 - 支付前通过 Feign 调订单服务校验订单归属和待支付状态，不再同步更新订单
-- 支付成功后发布 `bookmall.pay.success.exchange` / `pay.success` 消息
+- 支付成功后发布 `inknexus.pay.success.exchange` / `pay.success` 消息
 - 使用 `t_payment` 保存支付单，当前 `payType=mock`
 
-### `bookmall-ai`
+### `inknexus-ai`
 
 - `POST /api/ai/chat`：AI 对话，读通义千问，只查图书/订单，不写数据
 - `GET /api/ai/hello`：健康检查
@@ -299,15 +299,15 @@ docker exec -it redis redis-cli --scan --pattern 'category*'
 
 更细的模块说明在 `说明文档/` 目录下：
 
-- [说明文档/BookMall-基础设施搭建说明.md](/D:/workspace_idea/BookMall/说明文档/BookMall-基础设施搭建说明.md)
-- [说明文档/BookMall-auth说明文档.md](/D:/workspace_idea/BookMall/说明文档/BookMall-auth说明文档.md)
-- [说明文档/BookMall-book说明文档.md](/D:/workspace_idea/BookMall/说明文档/BookMall-book说明文档.md)
-- [说明文档/BookMall-cart说明文档.md](/D:/workspace_idea/BookMall/说明文档/BookMall-cart说明文档.md)
-- [说明文档/BookMall-stock说明文档.md](/D:/workspace_idea/BookMall/说明文档/BookMall-stock说明文档.md)
-- [说明文档/BookMall-ai-assistant说明文档.md](/D:/workspace_idea/BookMall/说明文档/BookMall-ai-assistant说明文档.md)
-- [说明文档/BookMall-payment说明文档.md](/D:/workspace_idea/BookMall/说明文档/BookMall-payment说明文档.md)
-- [说明文档/BookMall-gateway说明文档.md](/D:/workspace_idea/BookMall/说明文档/BookMall-gateway说明文档.md)
-- [说明文档/BookMall-order说明文档.md](/D:/workspace_idea/BookMall/说明文档/BookMall-order说明文档.md)
+- [说明文档/InkNexus-基础设施搭建说明.md](/D:/workspace_idea/InkNexus/说明文档/InkNexus-基础设施搭建说明.md)
+- [说明文档/InkNexus-auth说明文档.md](/D:/workspace_idea/InkNexus/说明文档/InkNexus-auth说明文档.md)
+- [说明文档/InkNexus-book说明文档.md](/D:/workspace_idea/InkNexus/说明文档/InkNexus-book说明文档.md)
+- [说明文档/InkNexus-cart说明文档.md](/D:/workspace_idea/InkNexus/说明文档/InkNexus-cart说明文档.md)
+- [说明文档/InkNexus-stock说明文档.md](/D:/workspace_idea/InkNexus/说明文档/InkNexus-stock说明文档.md)
+- [说明文档/InkNexus-ai-assistant说明文档.md](/D:/workspace_idea/InkNexus/说明文档/InkNexus-ai-assistant说明文档.md)
+- [说明文档/InkNexus-payment说明文档.md](/D:/workspace_idea/InkNexus/说明文档/InkNexus-payment说明文档.md)
+- [说明文档/InkNexus-gateway说明文档.md](/D:/workspace_idea/InkNexus/说明文档/InkNexus-gateway说明文档.md)
+- [说明文档/InkNexus-order说明文档.md](/D:/workspace_idea/InkNexus/说明文档/InkNexus-order说明文档.md)
 
 ## 目前进度
 

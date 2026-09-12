@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# macOS/Apple Silicon development bootstrap for BookMall.
+# macOS/Apple Silicon development bootstrap for InkNexus.
 # Starts Docker Desktop if needed, brings up local middleware, waits for
 # health checks, publishes Nacos config, and creates the Sentinel log dir.
 
@@ -95,13 +95,13 @@ cat <<'EOF'
 Next steps:
 
   Backend, in order:
-    mvn -f BookMall/pom.xml -pl bookmall-auth spring-boot:run
-    mvn -f BookMall/pom.xml -pl bookmall-book spring-boot:run "-Dspring-boot.run.jvmArguments=-Dcsp.sentinel.log.dir=${PWD}/logs/sentinel"
-    mvn -f BookMall/pom.xml -pl bookmall-cart spring-boot:run
-    mvn -f BookMall/pom.xml -pl bookmall-stock spring-boot:run
-    mvn -f BookMall/pom.xml -pl bookmall-order spring-boot:run
-    mvn -f BookMall/pom.xml -pl bookmall-payment spring-boot:run
-    mvn -f BookMall/pom.xml -pl bookmall-gateway spring-boot:run
+    mvn -f InkNexus/pom.xml -pl inknexus-auth spring-boot:run
+    mvn -f InkNexus/pom.xml -pl inknexus-book spring-boot:run "-Dspring-boot.run.jvmArguments=-Dcsp.sentinel.log.dir=${PWD}/logs/sentinel"
+    mvn -f InkNexus/pom.xml -pl inknexus-cart spring-boot:run
+    mvn -f InkNexus/pom.xml -pl inknexus-stock spring-boot:run
+    mvn -f InkNexus/pom.xml -pl inknexus-order spring-boot:run
+    mvn -f InkNexus/pom.xml -pl inknexus-payment spring-boot:run
+    mvn -f InkNexus/pom.xml -pl inknexus-gateway spring-boot:run
 
   Frontend:
     cd front

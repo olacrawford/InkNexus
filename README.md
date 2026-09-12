@@ -1,6 +1,6 @@
-# 墨枢 InkNexus（BookMall）
+# 墨枢 InkNexus
 
-墨枢 InkNexus（工程名 BookMall）是一个面向学习与展示的微服务图书商城项目，采用前后端分离架构，后端基于 Spring Cloud Alibaba，前端基于 Vue 3。当前保留六个核心业务微服务（用户、图书、购物车、库存、支付、订单）加网关、公共模块与 AI 问答助手，核心链路（注册登录、图书浏览、购物车结算下单、库存预占与确认、模拟支付、订单管理与超时关单）已跑通。
+墨枢 InkNexus 是一个面向学习与展示的微服务图书商城项目，采用前后端分离架构，后端基于 Spring Cloud Alibaba，前端基于 Vue 3。当前保留六个核心业务微服务（用户、图书、购物车、库存、支付、订单）加网关、公共模块与 AI 问答助手，核心链路（注册登录、图书浏览、购物车结算下单、库存预占与确认、模拟支付、订单管理与超时关单）已跑通。
 
 ## 项目亮点
 
@@ -32,8 +32,8 @@
 ## 仓库结构
 
 ```text
-BookMall/
-├─ BookMall/        后端微服务工程
+InkNexus/
+├─ InkNexus/        后端微服务工程
 ├─ front/           前端工程
 ├─ sql/             数据库脚本（sql.txt + updates/ 增量脚本）
 ├─ nacos-config/    Nacos 配置中心脚本
@@ -44,15 +44,15 @@ BookMall/
 
 | 模块 | 端口 | 职责 |
 |---|---:|---|
-| `bookmall-common` | - | 公共返回体、错误码、异常处理、分页对象 |
-| `bookmall-gateway` | 8080 | 统一入口、路由转发、JWT 鉴权、跨域 |
-| `bookmall-auth` | 8060 | 注册、登录、收货地址管理 |
-| `bookmall-book` | 8070 | 图书增删改查、分页、分类 |
-| `bookmall-cart` | 8083 | 购物车增加、查询、修改、删除、清空、结算 |
-| `bookmall-stock` | 8090 | 库存查询、下单预占、支付确认、取消释放 |
-| `bookmall-order` | 8050 | 订单（直接下单、购物车下单、列表、详情、取消、超时自动关单） |
-| `bookmall-payment` | 8051 | 支付单、内部模拟支付、发布支付成功事件触发订单异步更新与库存确认 |
-| `bookmall-ai` | 8071 | AI 问答助手：LangChain4j + DashScope 通义千问，只读调用图书/订单，会话记忆存 Redis |
+| `inknexus-common` | - | 公共返回体、错误码、异常处理、分页对象 |
+| `inknexus-gateway` | 8080 | 统一入口、路由转发、JWT 鉴权、跨域 |
+| `inknexus-auth` | 8060 | 注册、登录、收货地址管理 |
+| `inknexus-book` | 8070 | 图书增删改查、分页、分类 |
+| `inknexus-cart` | 8083 | 购物车增加、查询、修改、删除、清空、结算 |
+| `inknexus-stock` | 8090 | 库存查询、下单预占、支付确认、取消释放 |
+| `inknexus-order` | 8050 | 订单（直接下单、购物车下单、列表、详情、取消、超时自动关单） |
+| `inknexus-payment` | 8051 | 支付单、内部模拟支付、发布支付成功事件触发订单异步更新与库存确认 |
+| `inknexus-ai` | 8071 | AI 问答助手：LangChain4j + DashScope 通义千问，只读调用图书/订单，会话记忆存 Redis |
 | `front` | 5173 | 前端，Vite 托管 |
 
 ## 系统架构
@@ -144,23 +144,23 @@ bash scripts/dev-macos.sh
 
 建议顺序：
 
-1. `bookmall-auth`（8060）
-2. `bookmall-book`（8070）
-3. `bookmall-cart`（8083）
-4. `bookmall-stock`（8090）
-5. `bookmall-order`（8050）
-6. `bookmall-payment`（8051）
-7. `bookmall-gateway`（8080）
-8. `bookmall-ai`（8071，可选，AI 问答助手）
+1. `inknexus-auth`（8060）
+2. `inknexus-book`（8070）
+3. `inknexus-cart`（8083）
+4. `inknexus-stock`（8090）
+5. `inknexus-order`（8050）
+6. `inknexus-payment`（8051）
+7. `inknexus-gateway`（8080）
+8. `inknexus-ai`（8071，可选，AI 问答助手）
 
-启动 `bookmall-book` 时如需指定 Sentinel 日志目录：
+启动 `inknexus-book` 时如需指定 Sentinel 日志目录：
 
 ```bash
 mkdir -p logs/sentinel
-mvn -f BookMall/pom.xml -pl bookmall-book spring-boot:run "-Dspring-boot.run.jvmArguments=-Dcsp.sentinel.log.dir=${PWD}/logs/sentinel"
+mvn -f InkNexus/pom.xml -pl inknexus-book spring-boot:run "-Dspring-boot.run.jvmArguments=-Dcsp.sentinel.log.dir=${PWD}/logs/sentinel"
 ```
 
-启动 `bookmall-ai` 前需设置通义千问 Key：
+启动 `inknexus-ai` 前需设置通义千问 Key：
 
 ```bash
 export DASHSCOPE_API_KEY='sk-你的通义千问Key'
@@ -169,8 +169,8 @@ export DASHSCOPE_API_KEY='sk-你的通义千问Key'
 命令行启动方式：先安装公共模块，再按需替换模块名启动（不要对 `spring-boot:run` 使用 `-am`，否则会尝试在父工程上找启动类）：
 
 ```bash
-mvn -f BookMall/pom.xml -DskipTests install
-mvn -f BookMall/pom.xml -pl bookmall-auth spring-boot:run
+mvn -f InkNexus/pom.xml -DskipTests install
+mvn -f InkNexus/pom.xml -pl inknexus-auth spring-boot:run
 ```
 
 ### 6. 启动前端
@@ -206,17 +206,17 @@ for i in $(seq 1 100); do curl -s -o /dev/null "http://localhost:8080/api/books/
 
 ## 文档目录
 
-- [说明文档/BookMall-基础设施搭建说明.md](说明文档/BookMall-基础设施搭建说明.md)
-- [说明文档/BookMall-auth说明文档.md](说明文档/BookMall-auth说明文档.md)
-- [说明文档/BookMall-book说明文档.md](说明文档/BookMall-book说明文档.md)
-- [说明文档/BookMall-cart说明文档.md](说明文档/BookMall-cart说明文档.md)
-- [说明文档/BookMall-stock说明文档.md](说明文档/BookMall-stock说明文档.md)
-- [说明文档/BookMall-payment说明文档.md](说明文档/BookMall-payment说明文档.md)
-- [说明文档/BookMall-order说明文档.md](说明文档/BookMall-order说明文档.md)
-- [说明文档/BookMall-gateway说明文档.md](说明文档/BookMall-gateway说明文档.md)
-- [说明文档/BookMall-ai-assistant说明文档.md](说明文档/BookMall-ai-assistant说明文档.md)
-- [说明文档/BookMall-数据库设计说明.md](说明文档/BookMall-数据库设计说明.md)
-- [说明文档/BookMall-增强项实施说明.md](说明文档/BookMall-增强项实施说明.md)
-- [说明文档/BookMall-Nginx部署说明.md](说明文档/BookMall-Nginx部署说明.md)
-- [说明文档/BookMall-改进方案.md](说明文档/BookMall-改进方案.md)
+- [说明文档/InkNexus-基础设施搭建说明.md](说明文档/InkNexus-基础设施搭建说明.md)
+- [说明文档/InkNexus-auth说明文档.md](说明文档/InkNexus-auth说明文档.md)
+- [说明文档/InkNexus-book说明文档.md](说明文档/InkNexus-book说明文档.md)
+- [说明文档/InkNexus-cart说明文档.md](说明文档/InkNexus-cart说明文档.md)
+- [说明文档/InkNexus-stock说明文档.md](说明文档/InkNexus-stock说明文档.md)
+- [说明文档/InkNexus-payment说明文档.md](说明文档/InkNexus-payment说明文档.md)
+- [说明文档/InkNexus-order说明文档.md](说明文档/InkNexus-order说明文档.md)
+- [说明文档/InkNexus-gateway说明文档.md](说明文档/InkNexus-gateway说明文档.md)
+- [说明文档/InkNexus-ai-assistant说明文档.md](说明文档/InkNexus-ai-assistant说明文档.md)
+- [说明文档/InkNexus-数据库设计说明.md](说明文档/InkNexus-数据库设计说明.md)
+- [说明文档/InkNexus-增强项实施说明.md](说明文档/InkNexus-增强项实施说明.md)
+- [说明文档/InkNexus-Nginx部署说明.md](说明文档/InkNexus-Nginx部署说明.md)
+- [说明文档/InkNexus-改进方案.md](说明文档/InkNexus-改进方案.md)
 - [说明文档/README.md](说明文档/README.md)

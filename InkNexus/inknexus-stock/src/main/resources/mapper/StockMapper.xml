@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.inknexus.stock.mapper.StockMapper">
+
+    <!-- 预占库存：只有可售库存足够时才扣减，返回受影响行数 -->
+    <update id="deductStock">
+        UPDATE t_book_stock
+        SET stock = stock - #{quantity},
+            locked_stock = locked_stock + #{quantity},
+            version = version + 1
+        WHERE book_id = #{bookId}
+          AND stock >= #{quantity}
+    </update>
+
+    <!-- 释放库存：按实际锁定库存恢复，锁定为0时视为已释放，保证超时/取消补偿幂等 -->
+    <update id="releaseStock">
+        UPDATE t_book_stock
+        SET stock = stock + LEAST(locked_stock, #{quantity}),
+            locked_stock = locked_stock - LEAST(locked_stock, #{quantity}),
+            version = version + 1
+        WHERE book_id = #{bookId}
+          AND locked_stock > 0
+    </update>
+
+    <!-- 确认库存：支付成功后把预占库存转成真实扣减，仍在锁定中的库存才会减少 -->
+    <update id="confirmStock">
+        UPDATE t_book_stock
+        SET locked_stock = locked_stock - #{quantity},
+            version = version + 1
+        WHERE book_id = #{bookId}
+          AND locked_stock >= #{quantity}
+    </update>
+
+</mapper>

@@ -50,9 +50,9 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-import { aiApi, aiChatStream } from '../api/bookmall'
+import { aiApi, aiChatStream } from '../api/inknexus'
 
-const CONVERSATION_KEY = 'bookmall_ai_conversation'
+const CONVERSATION_KEY = 'inknexus_ai_conversation'
 
 const suggestions = ['推荐几本关于AI的书', '查一下我的订单', '有哪些图书分类']
 const messages = ref([])

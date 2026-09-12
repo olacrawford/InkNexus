@@ -7,7 +7,7 @@ const http = axios.create({
 })
 
 http.interceptors.request.use((config) => {
-  const token = localStorage.getItem('bookmall_token')
+  const token = localStorage.getItem('inknexus_token')
   if (token) {
     config.headers = config.headers || {}
     config.headers.Authorization = `Bearer ${token}`

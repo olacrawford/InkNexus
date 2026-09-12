@@ -1,4 +1,4 @@
-USE bookmall;
+USE inknexus;
 
 -- 收货地址表
 CREATE TABLE IF NOT EXISTS t_user_address (

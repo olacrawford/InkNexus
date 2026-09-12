@@ -19,3 +19,6 @@ logs/
 
 # Unused local folders
 META-INF/
+
+# Local agent skills (separate git repo, kept out of the project repo)
+.agents/

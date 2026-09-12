@@ -1,7 +1,7 @@
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/bookmall?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/inknexus?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
     username: root
     password: 123456
   rabbitmq:
@@ -17,7 +17,7 @@ spring:
             connect-timeout: 3000
             read-timeout: 5000
 
-bookmall:
+inknexus:
   order:
     expire-minutes: 30
     # 超时关单主链路是 RabbitMQ 延迟消息（TTL+死信），此 cron 只是兜底扫描周期

@@ -2,7 +2,7 @@
 # Uses arm64-compatible images and named volumes so data survives restarts.
 # Ports and accounts match nacos-config/*.yaml:
 #   MySQL root / 123456, RabbitMQ admin / 123456.
-name: bookmall-infra
+name: inknexus-infra
 
 services:
   mysql:
