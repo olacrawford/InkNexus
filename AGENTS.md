@@ -18,7 +18,6 @@ The Git root is this directory. The project is named 墨枢 InkNexus; Maven modu
 - REST APIs are documented with Knife4j (springdoc) in each service.
 - `front/`: Vue 3 + Vite app under `front/src/` — axios wrapper and endpoints in `src/api/` (`http.js`, `inknexus.js`, `result.js` for unwrapping `Result`), session helpers in `src/utils/`, views in `src/views/` (Home, Books, Cart, Orders, Address, Login, AiChat).
 - `sql/sql.txt`: complete MySQL schema and seed data, including all 10 tables.
-- `sql/updates/`: numbered incremental SQL scripts (`001_*.sql` …) for existing environments.
 - `nacos-config/`: per-service config and `publish.sh`.
 - `docker-compose.infra.yml`: local MySQL, Nacos, Redis, and RabbitMQ for macOS / Docker Desktop.
 - `docker-compose.nginx.yml`: builds `front/` via its Dockerfile and serves the SPA through nginx on port 80; see `说明文档/InkNexus-Nginx部署说明.md`. Note `front/package.json`'s `build:docker` uses Windows `copy` — on macOS run `npm run build` instead.
@@ -41,13 +40,13 @@ mkdir -p logs/sentinel
 mvn -f InkNexus/pom.xml -pl inknexus-book spring-boot:run "-Dspring-boot.run.jvmArguments=-Dcsp.sentinel.log.dir=${PWD}/logs/sentinel"
 ```
 
-For frontend, run `cd front && npm install && npm run dev` to start Vue at `http://localhost:5173`, or `npm run build` to produce the build. Apply database changes by running `sql/sql.txt` and `sql/updates/*.sql` against MySQL. Publish config changes with `cd nacos-config && bash publish.sh`.
+For frontend, run `cd front && npm install && npm run dev` to start Vue at `http://localhost:5173`, or `npm run build` to produce the build. Apply the database schema by running `sql/sql.txt` against MySQL. Publish config changes with `cd nacos-config && bash publish.sh`.
 
 ## Coding Style & Naming Conventions
 
 Backend: use Java 17, UTF-8, and 4-space indentation. Follow existing packages: `controller`, `service`, `service.impl`, `mapper`, `entity`, `dto`, `vo`, `config`, `client`, `filter`, `util`. Name classes by role, like `BookCreateRequest` or `AuthGlobalFilter`. Keep controllers thin, validate DTOs, return `Result<T>` / `PageResult<T>`, and throw `BusinessException` with `ErrorCode`. No linter is configured; match the surrounding code.
 
-Frontend: keep requests in `front/src/api/`, views in `front/src/views/`, and use the existing Vue 3 SFC style. New database changes go in `sql/updates/` and align with backend entities and mappers. For new environments, `sql/sql.txt` is the complete initialization script.
+Frontend: keep requests in `front/src/api/`, views in `front/src/views/`, and use the existing Vue 3 SFC style. Schema changes go directly into `sql/sql.txt` (single source of truth) and align with backend entities and mappers.
 
 ## Testing Guidelines
 

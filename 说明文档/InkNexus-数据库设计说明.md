@@ -2,98 +2,43 @@
 
 ## 当前基础表
 
-`sql/sql.txt` 保存完整建库脚本，目前包含 9 张表：
+`sql/sql.txt` 是唯一需要维护的建库脚本，包含全部 10 张表与种子数据，新环境直接执行即可完成初始化：
 
-- `t_user`：用户
+- `t_user`：用户（含 `role` 角色，图书管理接口鉴权用）
 - `t_category`：图书分类
-- `t_book`：图书
+- `t_book`：图书（含 `deleted` 软删除标记）
 - `t_user_address`：收货地址
 - `t_cart_item`：购物车
 - `t_book_stock`：图书库存
 - `t_order`：订单主表
 - `t_order_item`：订单明细
 - `t_payment`：支付单
+- `t_mq_consumed_log`：MQ 消费去重记录
 
-## 增量脚本规范
+## 关键设计
 
-新环境可以直接执行 `sql/sql.txt` 完成初始化；已经初始化过的旧环境按顺序执行 `sql/updates/` 下的增量脚本，不重复执行 `sql/sql.txt`。
+### 订单幂等键
 
-## 第一阶段新增
+`t_order` 上的 `uk_user_request (user_id, client_request_id)` 联合唯一键是下单幂等的根基：可空列 + 联合唯一，传了请求号的请求重复提交时触发 `DuplicateKeyException`，订单服务补偿释放库存并返回已有订单；不传则完全兼容老请求（MySQL 唯一索引不去重 NULL）。
 
-脚本：`sql/updates/001_cart_address_stock.sql`
+### 库存三态
 
-- `t_user_address`：用户收货地址，支持多个地址和默认地址。
-- `t_cart_item`：购物车条目，`(user_id, book_id)` 唯一，由 `inknexus-cart` 服务使用，同一本书重复加入时更新数量。
-- `t_book_stock`：图书库存表。
+`t_book_stock` 用 `stock`（可售）与 `locked_stock`（预占）两列表达三态流转：
 
-执行方式：
+- 预占：`stock` 减少、`locked_stock` 增加（条件 `stock >= quantity`，防超卖）
+- 支付确认：只减少 `locked_stock`，`stock` 保持不变（真实售出）
+- 取消/超时释放：`stock` 恢复、`locked_stock` 减少（`LEAST` 钳制，无锁定时按已释放处理）
 
-```bash
-mysql -h127.0.0.1 -uroot -p < sql/updates/001_cart_address_stock.sql
-```
+`version` 只是变更计数，便于对账，一致性由带条件的原子 `UPDATE` 保证。
 
-## 库存服务接入
+### 超时关单索引
 
-脚本：`sql/updates/002_stock_order.sql`
+`t_order` 的 `idx_status_expire_time (status, expire_time)` 服务于超时关单链路：兜底定时任务按「待支付 + 已过期」扫描，延迟消息关单为主、定时扫描兜底。
 
-- 不创建新表，只为 `t_book` 中新增但还没有库存行的图书补齐默认库存。
-- 脚本可重复执行，适合后续手工插入或管理端新增图书后补库存。
+### 消费幂等
 
-`t_book_stock` 由 `inknexus-stock` 服务使用，下单时更新：
+`t_mq_consumed_log` 的 `uk_message_id` 唯一键保证库存确认/释放消息按 `eventId` 只消费一次；去重记录与库存更新写在同一事务，库存操作回滚时记录一并回滚。
 
-- `stock` 减少、`locked_stock` 增加：预占库存
-- `stock` 恢复、`locked_stock` 减少：取消订单释放库存
-- `version` 随每次变更递增，作为变更计数，库存一致性由带条件的原子 `UPDATE` 保证
+## 演进历史
 
-## 支付服务接入
-
-脚本：`sql/updates/003_payment.sql`
-
-新增 `t_payment` 支付单表：
-
-- `payment_no`：支付单号，唯一
-- `order_id`、`order_no`：关联订单
-- `amount`：支付金额
-- `pay_type`：当前固定 `mock`
-- `status`：0 待支付，1 已支付，2 失败
-- `pay_time`：支付时间
-
-执行方式：
-
-```bash
-mysql -h127.0.0.1 -uroot -p < sql/updates/003_payment.sql
-```
-
-## 订单超时与库存确认
-
-脚本：`sql/updates/004_order_expire_stock_confirm.sql`
-
-- 给 `t_order` 增加 `expire_time`，保存订单过期时间
-- 为已存在的订单按创建时间补齐 `expire_time`，默认 30 分钟
-- 增加 `(status, expire_time)` 索引，供超时关单定时任务扫描
-
-订单支付确认后不再改变 `t_book_stock.stock`，因为下单预占时已经扣减：
-
-- 预占：`stock` 减少，`locked_stock` 增加
-- 支付确认：`locked_stock` 减少，`stock` 保持不变
-- 取消/释放：`stock` 恢复，`locked_stock` 减少；无锁定库存时按已释放处理
-
-执行方式：
-
-```bash
-mysql -h127.0.0.1 -uroot -p < sql/updates/004_order_expire_stock_confirm.sql
-```
-
-## 查询与并发优化
-
-脚本：`sql/updates/005_optimization.sql`
-
-- 把 `t_order` 的 `idx_user_id` 调整为 `(user_id, create_time)` 复合索引，服务于订单列表按用户和创建时间降序查询
-
-该脚本会先删除旧索引再建新索引；对已有环境执行一次即可，新环境已包含在 `sql/sql.txt` 中。
-
-执行方式：
-
-```bash
-mysql -h127.0.0.1 -uroot -p < sql/updates/005_optimization.sql
-```
+历史上的增量脚本（001～009，从购物车/地址/库存三表到用户角色列、消费去重表）已全部合并进 `sql/sql.txt` 并删除，演进过程可在 Git 提交历史中查看（检索 `sql` 相关提交）。

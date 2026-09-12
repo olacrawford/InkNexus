@@ -37,7 +37,7 @@
 InkNexus/
 ├─ InkNexus/        后端微服务工程
 ├─ front/           前端工程
-├─ sql/             数据库脚本（sql.txt + updates/ 增量脚本）
+├─ sql/             数据库初始化脚本（sql.txt，10 张表 + 种子数据）
 ├─ nacos-config/    Nacos 配置中心脚本
 └─ 说明文档/         模块说明文档
 ```
@@ -136,7 +136,7 @@ bash scripts/dev-macos.sh
 
 新环境初始化直接执行 [sql/sql.txt](sql/sql.txt) 即可，脚本已包含用户、图书、购物车、库存、订单、支付、MQ 消费去重等全部 10 张表和默认库存。
 
-已有环境按顺序执行 `sql/updates/001_cart_address_stock.sql`、`002_stock_order.sql`、`003_payment.sql`、`004_order_expire_stock_confirm.sql`、`005_optimization.sql`、`006_order_request_id.sql`、`007_rename_database_to_inknexus.sql`、`008_user_role.sql`、`009_mq_consumed_log.sql` 完成增量升级。注意：`008` 会把 id=1 的用户提升为管理员，可按需修改；升级到含死信参数的队列版本后需删除旧 RabbitMQ 队列让服务重新声明。
+旧版本存量环境如需升级，直接参考 Git 历史中的增量脚本（`git log -- sql/`），或备份数据后重新执行 `sql.txt`。两点注意：`t_user.role` 需要把管理员账号手动 `UPDATE` 为 `ADMIN`；升级到含死信参数的队列版本后需删除旧 RabbitMQ 队列让服务重新声明。
 
 ### 4. 数据库与配置
 

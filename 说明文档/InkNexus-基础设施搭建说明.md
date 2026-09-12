@@ -68,8 +68,7 @@ bash publish.sh
 
 数据库脚本：
 
-- `sql/sql.txt`：初始化数据库和基础表
-- `sql/updates/`：增量脚本
+- `sql/sql.txt`：初始化数据库、全部 10 张表和种子数据
 
 当前已创建的表：
 
