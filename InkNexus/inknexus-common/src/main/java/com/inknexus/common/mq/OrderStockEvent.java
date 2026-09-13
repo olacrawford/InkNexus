@@ -14,9 +14,12 @@ import java.util.UUID;
 @NoArgsConstructor
 public class OrderStockEvent {
 
+    // 已支付：库存侧把预占库存转为确认扣减
     public static final String OPERATION_ORDER_PAID = "ORDER_PAID";
+    // 取消/关单：库存侧释放预占库存
     public static final String OPERATION_ORDER_RELEASE = "ORDER_RELEASE";
 
+    // 消费侧按 eventId 幂等（t_mq_consumed_log 去重），防 MQ 重投导致库存重复确认/释放
     private String eventId = UUID.randomUUID().toString();
     private Long orderId;
     private Long userId;

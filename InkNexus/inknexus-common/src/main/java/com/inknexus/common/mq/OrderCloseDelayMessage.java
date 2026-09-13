@@ -13,6 +13,7 @@ import java.util.UUID;
 @NoArgsConstructor
 public class OrderCloseDelayMessage {
 
+    // 关单消费按 eventId 幂等，防 TTL 重投导致重复关单
     private String eventId = UUID.randomUUID().toString();
     private Long orderId;
 }

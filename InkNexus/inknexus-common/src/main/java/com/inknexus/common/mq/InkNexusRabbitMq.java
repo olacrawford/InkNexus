@@ -1,7 +1,8 @@
 package com.inknexus.common.mq;
 
 /**
- * InkNexus RabbitMQ 消息拓扑常量。
+ * InkNexus RabbitMQ 消息拓扑常量：交换机/队列/routing key 集中在此定义，
+ * 各模块声明拓扑与收发消息都引用本类，避免字符串写散导致对不上。
  */
 public final class InkNexusRabbitMq {
 
