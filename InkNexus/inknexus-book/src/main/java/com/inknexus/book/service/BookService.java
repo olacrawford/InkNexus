@@ -20,6 +20,13 @@ public interface BookService {
     List<BookVO> listBooks();
 
     /**
+     * 按 id 批量查询上架图书，供订单服务购物车下单使用，替代逐本远程调用
+     * @param ids 图书id集合
+     * @return 存在且上架的图书VO集合，顺序不保证与入参一致；入参为空返回空集合
+     */
+    List<BookVO> listBooksByIds(List<Long> ids);
+
+    /**
      * 根据id查询图书详情
      * @param id 图书id
      * @return 图书详情VO，不存在返回null

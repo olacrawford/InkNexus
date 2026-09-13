@@ -53,6 +53,22 @@ public class BookServiceImpl implements BookService {
         throw new BusinessException(429, "图书列表请求过于频繁，请稍后再试");
     }
 
+    /**
+     * 按 id 批量查询上架图书：一条 IN 查询替代逐本 select，
+     * 只返回存在且上架的图书，缺失的由调用方（订单服务）判定报错
+     */
+    @Override
+    public List<BookVO> listBooksByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return bookMapper.selectList(
+                new LambdaQueryWrapper<Book>()
+                        .in(Book::getId, ids)
+                        .eq(Book::getStatus, 1)
+        ).stream().map(this::toBookVO).collect(Collectors.toList());
+    }
+
     // 限流触发时返回友好提示
     public BookDetailVO getBookByIdBlocked(BlockException e) {
         throw new BusinessException(429, "图书详情请求过于频繁，请稍后再试");

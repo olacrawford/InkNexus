@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -90,6 +91,27 @@ class BookServiceImplTest {
         assertEquals(1, result.getTotal());
         assertEquals(1, result.getRecords().size());
         assertEquals("Java核心技术", result.getRecords().get(0).getTitle());
+    }
+
+    @Test
+    void listBooksByIds_returnsMappedBooks() {
+        when(bookMapper.selectList(any())).thenReturn(List.of(book()));
+
+        List<BookVO> result = bookService.listBooksByIds(List.of(1L, 2L));
+
+        assertEquals(1, result.size());
+        assertEquals(1L, result.get(0).getId());
+        assertEquals(new BigDecimal("149.00"), result.get(0).getPrice());
+        verify(bookMapper).selectList(any());
+    }
+
+    @Test
+    void listBooksByIds_skipsQuery_whenIdsEmpty() {
+        List<BookVO> result = bookService.listBooksByIds(List.of());
+
+        assertEquals(0, result.size());
+        // 空入参直接短路，不打数据库
+        verify(bookMapper, never()).selectList(any());
     }
 
     private Book book() {

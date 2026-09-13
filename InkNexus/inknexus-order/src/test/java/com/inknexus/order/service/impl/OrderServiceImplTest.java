@@ -4,13 +4,16 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
+import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
 import com.inknexus.order.client.BookClient;
 import com.inknexus.order.client.CartClient;
 import com.inknexus.order.client.StockClient;
 import com.inknexus.order.client.dto.BookSnapshot;
+import com.inknexus.order.client.dto.CartItemSnapshot;
 import com.inknexus.order.client.dto.StockOperationRequest;
 import com.inknexus.order.dto.OrderCreateRequest;
+import com.inknexus.order.dto.OrderFromCartRequest;
 import com.inknexus.order.entity.Order;
 import com.inknexus.order.entity.OrderItem;
 import com.inknexus.order.mapper.OrderItemMapper;
@@ -31,6 +34,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -247,6 +251,72 @@ class OrderServiceImplTest {
         assertEquals("req-1", captor.getValue().getClientRequestId());
         // 下单成功后应发布超时关单延迟消息
         verify(orderEventPublisher).publishOrderCloseDelay(100L);
+    }
+
+    @Test
+    void createOrderFromCart_batchFetchesBooks_andCreatesOrder() throws Exception {
+        CartItemSnapshot item = new CartItemSnapshot();
+        item.setId(1L);
+        item.setBookId(5L);
+        item.setQuantity(2);
+        item.setSelected(1);
+
+        BookSnapshot book = new BookSnapshot();
+        book.setId(5L);
+        book.setTitle("Java 编程思想");
+        book.setPrice(new BigDecimal("99.00"));
+
+        Order created = new Order();
+        created.setId(100L);
+        created.setUserId(1L);
+
+        when(cartClient.selectedItems(1L)).thenReturn(Result.success(List.of(item)));
+        when(bookClient.listBooksByIds(List.of(5L))).thenReturn(Result.success(List.of(book)));
+        when(stockClient.deduct(any(StockOperationRequest.class))).thenReturn(Result.success());
+        when(orderMapper.insert(any(Order.class))).thenAnswer(invocation -> {
+            Order inserting = invocation.getArgument(0);
+            inserting.setId(100L);
+            return 1;
+        });
+        when(orderMapper.selectById(any())).thenReturn(created);
+        when(orderItemMapper.selectList(any())).thenReturn(List.of());
+
+        OrderFromCartRequest request = new OrderFromCartRequest();
+        request.setReceiverName("张三");
+        request.setReceiverPhone("13800000000");
+        request.setReceiverAddress("北京市朝阳区");
+        request.setClientRequestId("req-cart-1");
+
+        OrderDetailVO detail = orderService.createOrderFromCart(1L, request);
+
+        assertEquals(100L, detail.getId());
+        // N+1 回归守卫：购物车下单必须走一次批量拉取，不允许逐本单查
+        verify(bookClient).listBooksByIds(List.of(5L));
+        verify(bookClient, never()).getBookById(any());
+        verify(orderEventPublisher).publishOrderCloseDelay(100L);
+    }
+
+    @Test
+    void createOrderFromCart_throwsWithoutReservingStock_whenBookMissing() {
+        CartItemSnapshot item = new CartItemSnapshot();
+        item.setBookId(5L);
+        item.setQuantity(2);
+
+        when(cartClient.selectedItems(1L)).thenReturn(Result.success(List.of(item)));
+        // 批量结果里没有 bookId=5：图书不存在或已下架
+        when(bookClient.listBooksByIds(List.of(5L))).thenReturn(Result.success(List.of()));
+
+        OrderFromCartRequest request = new OrderFromCartRequest();
+        request.setReceiverName("张三");
+        request.setReceiverPhone("13800000000");
+        request.setReceiverAddress("北京市朝阳区");
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> orderService.createOrderFromCart(1L, request));
+
+        assertEquals(400, ex.getCode());
+        // 校验失败发生在预占之前，绝不能动库存
+        verify(stockClient, never()).deduct(any());
     }
 
     private OrderCreateRequest buildCreateRequest(String clientRequestId) {

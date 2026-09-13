@@ -32,7 +32,9 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -81,23 +83,14 @@ public class OrderServiceImpl implements OrderService {
 
         List<StockOperationItem> stockItems = List.of(
                 new StockOperationItem(request.getBookId(), request.getQuantity()));
-        // 先预占库存，再创建本地订单，保证下单时有可售库存
-        reserveStock(stockItems);
-        try {
-            BigDecimal totalAmount = book.getPrice().multiply(BigDecimal.valueOf(request.getQuantity()));
+        BigDecimal totalAmount = book.getPrice().multiply(BigDecimal.valueOf(request.getQuantity()));
+
+        return placeOrder(userId, request.getClientRequestId(), stockItems, () -> {
             Order order = insertOrderHead(userId, request.getClientRequestId(), totalAmount,
                     request.getReceiverName(), request.getReceiverPhone(), request.getReceiverAddress());
             insertOrderItem(order, book, request.getQuantity());
-            publishCloseDelay(order.getId());
-            return getOrderDetail(order.getId(), userId);
-        } catch (DuplicateKeyException ex) {
-            // 幂等命中：同一用户同一请求号已下过单，补偿释放本次预占并返回已有订单
-            return returnExistingOrder(userId, request.getClientRequestId(), stockItems, ex);
-        } catch (Exception ex) {
-            // 本地订单落库异常时补偿释放，避免库存被长期占用
-            releaseStockQuietly(stockItems);
-            throw ex;
-        }
+            return order;
+        });
     }
 
     /**
@@ -111,12 +104,21 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException(400, "购物车没有选中的商品");
         }
 
-        // 先远程校验每本书，并计算总价；任一本书异常时不落库
+        // 一次批量拉取所有图书（一条 IN 查询），替代逐本 Feign 调用导致下单延迟随商品数线性增长
+        List<Long> bookIds = cartItems.stream().map(CartItemSnapshot::getBookId).toList();
+        List<BookSnapshot> fetchedBooks = successfulData(bookClient.listBooksByIds(bookIds));
+        if (fetchedBooks == null) {
+            throw new BusinessException(400, "购物车中有图书不存在或已下架");
+        }
+        Map<Long, BookSnapshot> bookMap = fetchedBooks.stream()
+                .collect(Collectors.toMap(BookSnapshot::getId, b -> b));
+
+        // 校验每本书都已拿到价格并计算总价；任一本书不存在/下架时不落库
         List<BookSnapshot> books = new ArrayList<>();
         List<Integer> quantities = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
         for (CartItemSnapshot item : cartItems) {
-            BookSnapshot book = successfulData(bookClient.getBookById(item.getBookId()));
+            BookSnapshot book = bookMap.get(item.getBookId());
             if (book == null || book.getPrice() == null) {
                 throw new BusinessException(400, "购物车中有图书不存在或已下架");
             }
@@ -126,20 +128,36 @@ public class OrderServiceImpl implements OrderService {
         }
 
         List<StockOperationItem> stockItems = buildStockItems(books, quantities);
+        // 累加过的变量不能被 lambda 引用，取 final 别名
+        BigDecimal finalTotalAmount = totalAmount;
         // 一次预占所有商品，库存服务内部会整体回滚
-        reserveStock(stockItems);
-        try {
-            Order order = insertOrderHead(userId, request.getClientRequestId(), totalAmount,
+        return placeOrder(userId, request.getClientRequestId(), stockItems, () -> {
+            Order order = insertOrderHead(userId, request.getClientRequestId(), finalTotalAmount,
                     request.getReceiverName(), request.getReceiverPhone(), request.getReceiverAddress());
             for (int i = 0; i < books.size(); i++) {
                 insertOrderItem(order, books.get(i), quantities.get(i));
             }
+            return order;
+        });
+    }
+
+    /**
+     * 下单公共骨架：预占库存 → try 落库+发关单消息 → 幂等命中补偿/异常补偿。
+     * 远程预占发生在本地事务之外、不可回滚，因此落库失败必须显式补偿释放（见两个 catch）。
+     *
+     * @param orderWriter 订单落库动作（主表+明细），返回创建的订单；由各下单入口提供各自的写法
+     */
+    private OrderDetailVO placeOrder(Long userId, String clientRequestId,
+                                     List<StockOperationItem> stockItems, Supplier<Order> orderWriter) {
+        reserveStock(stockItems);
+        try {
+            Order order = orderWriter.get();
             publishCloseDelay(order.getId());
             return getOrderDetail(order.getId(), userId);
         } catch (DuplicateKeyException ex) {
             // 幂等命中：同一用户同一请求号已下过单，补偿释放本次预占并返回已有订单
-            return returnExistingOrder(userId, request.getClientRequestId(), stockItems, ex);
-        } catch (RuntimeException ex) {
+            return returnExistingOrder(userId, clientRequestId, stockItems, ex);
+        } catch (Exception ex) {
             // 本地订单落库异常时补偿释放，避免库存被长期占用
             releaseStockQuietly(stockItems);
             throw ex;

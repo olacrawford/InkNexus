@@ -37,6 +37,12 @@ public class BookController {
         return Result.success(bookService.listBooks());
     }
 
+    // 按 ID 批量查询上架图书（订单服务购物车下单用），ids 支持 1,2,3 或重复参数两种传法
+    @GetMapping("/by-ids")
+    public Result<List<BookVO>> listBooksByIds(@RequestParam("ids") List<Long> ids) {
+        return Result.success(bookService.listBooksByIds(ids));
+    }
+
     // 根据 ID 查询图书详情
     @GetMapping("/{id}")
     public Result<BookDetailVO> getBookById(@PathVariable("id") Long id) {
