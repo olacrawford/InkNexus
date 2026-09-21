@@ -53,4 +53,5 @@ public class StockController {
 
     // 说明：release/confirm 曾有 HTTP 调试入口，但订单服务实际只通过 MQ 事件触发库存释放与确认；
     // 这两个入口允许登录用户绕过订单状态直接篡改库存账目，已下线，与 /orders/{id}/paid 的处理保持一致。
+    // deduct 仅供订单服务 Feign 直连（走服务发现，不经网关）；网关侧已将其列入内部端点对外封禁（见 gateway 的 AuthGlobalFilter）。
 }

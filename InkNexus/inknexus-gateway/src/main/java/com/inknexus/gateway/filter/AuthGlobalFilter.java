@@ -17,6 +17,7 @@ import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * 网关全局鉴权过滤器：请求转发到下游前统一校验 JWT，把解析出的用户身份
@@ -24,9 +25,16 @@ import java.nio.charset.StandardCharsets;
  * 信任边界：下游不解析 JWT，只认网关注入的这两个头（管理接口的 ADMIN 判权依赖
  * token 的 role claim），因此必须覆盖式重写，客户端伪造的同名头不能透传；
  * 白名单（isPublic）之外一律 fail-closed：无 token、格式不对或解析失败都返回 401。
+ * 另对仅供服务间 Feign 直连的内部端点做外部封禁（INTERNAL_ONLY_PATHS）。
  */
 @Component
 public class AuthGlobalFilter implements GlobalFilter, Ordered {
+
+    /**
+     * 内部端点：调用方（订单服务预占库存）走 Nacos 服务发现直连 stock，
+     * 不经过网关；这里先于鉴权拦截，合法 token 也不放行，防止绕过订单状态篡改库存。
+     */
+    private static final List<String> INTERNAL_ONLY_PATHS = List.of("/api/stock/deduct");
 
     private final SecretKey secretKey;
 
@@ -39,6 +47,10 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
      */
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        if (isInternalOnly(exchange.getRequest().getURI().getPath())) {
+            return forbidden(exchange);
+        }
+
         if (isPublic(exchange)) {
             return chain.filter(exchange);
         }
@@ -71,6 +83,10 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         }
     }
 
+    private boolean isInternalOnly(String path) {
+        return INTERNAL_ONLY_PATHS.contains(path);
+    }
+
     private boolean isPublic(ServerWebExchange exchange) {
         String path = exchange.getRequest().getURI().getPath();
         HttpMethod method = exchange.getRequest().getMethod();
@@ -91,6 +107,15 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
         exchange.getResponse().getHeaders().set(HttpHeaders.CONTENT_TYPE, "application/json;charset=UTF-8");
         String body = "{\"code\":401,\"message\":\"" + message + "\",\"data\":null}";
+        return exchange.getResponse().writeWith(
+                Mono.just(exchange.getResponse().bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8)))
+        );
+    }
+
+    private Mono<Void> forbidden(ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+        exchange.getResponse().getHeaders().set(HttpHeaders.CONTENT_TYPE, "application/json;charset=UTF-8");
+        String body = "{\"code\":403,\"message\":\"内部接口，禁止外部访问\",\"data\":null}";
         return exchange.getResponse().writeWith(
                 Mono.just(exchange.getResponse().bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8)))
         );

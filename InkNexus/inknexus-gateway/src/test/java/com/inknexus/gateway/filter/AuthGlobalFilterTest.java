@@ -148,6 +148,44 @@ class AuthGlobalFilterTest {
         assertEquals("USER", captor.getValue().getRequest().getHeaders().getFirst("X-User-Role"));
     }
 
+    @Test
+    void filter_returns403ForInternalDeduct_whenValidAdminToken() {
+        // 防回归：/stock/deduct 仅供订单服务 Feign 直连，网关侧必须对外封禁，合法 ADMIN token 也不放行
+        String token = token("7", "ADMIN");
+        ServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/api/stock/deduct")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .build());
+
+        filter.filter(exchange, chain).block();
+
+        assertEquals(HttpStatus.FORBIDDEN, exchange.getResponse().getStatusCode());
+        verify(chain, never()).filter(any());
+    }
+
+    @Test
+    void filter_returns403ForInternalDeduct_whenTokenMissing() {
+        ServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/api/stock/deduct").build());
+
+        filter.filter(exchange, chain).block();
+
+        assertEquals(HttpStatus.FORBIDDEN, exchange.getResponse().getStatusCode());
+        verify(chain, never()).filter(any());
+    }
+
+    @Test
+    void filter_passesPublicStockQuery_withoutToken() {
+        // 内部端点封禁不能扩大化：库存只读查询仍属公开白名单
+        ServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/stock/1").build());
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        verify(chain).filter(any());
+    }
+
     private String token(String subject) {
         return token(subject, null);
     }

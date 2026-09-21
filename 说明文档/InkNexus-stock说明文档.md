@@ -69,7 +69,7 @@
 }
 ```
 
-### 4.3 POST /stock/deduct
+### 4.3 POST /stock/deduct（仅限内部 Feign 调用）
 
 预占库存。请求体：
 
@@ -85,6 +85,8 @@
 ```
 
 库存不足时返回业务错误，同一请求内多本书的预占操作会整体回滚。
+
+该端点仅供订单服务通过 Feign（Nacos 服务发现直连 stock）调用，**不开放外部访问**：网关已将其列入内部端点对外封禁（`AuthGlobalFilter`，合法登录 token 也会返回 403），避免绕过订单状态直接篡改库存。
 
 ### 4.4 已下线的调试接口（POST /stock/release、POST /stock/confirm）
 
@@ -137,14 +139,11 @@
 
 ## 9. 验证方式
 
-通过网关验证：
+通过网关验证（库存对外只读）：
 
 ```text
 GET  http://localhost:8080/api/stock/1
 GET  http://localhost:8080/api/stock/hello
-POST http://localhost:8080/api/stock/deduct
-POST http://localhost:8080/api/stock/release
-POST http://localhost:8080/api/stock/confirm
 ```
 
-库存预占、确认与释放也可以通过订单链路验证：下单后库存 `stock` 减少、`lockedStock` 增加；支付成功后 `lockedStock` 减少；取消订单后恢复。历史待支付订单没有锁定库存时，超时关单会按“已释放”处理，不会一直重试失败。
+`POST /api/stock/deduct` 经网关访问会返回 403（内部端点封禁），预占只能通过订单链路验证：下单后库存 `stock` 减少、`lockedStock` 增加；支付成功后 `lockedStock` 减少；取消订单后恢复。历史待支付订单没有锁定库存时，超时关单会按“已释放”处理，不会一直重试失败。
