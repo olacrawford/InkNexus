@@ -7,30 +7,27 @@ import com.inknexus.order.service.OrderService;
 import com.inknexus.order.vo.OrderDetailVO;
 import com.inknexus.order.vo.OrderVO;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
- * 订单接口
+ * 订单 HTTP 接口：直接下单、购物车下单、列表/详情查询、取消与确认收货。
+ * 用户身份一律取网关鉴权后透传的 X-User-Id 请求头，不信任任何请求参数里的用户标识。
  */
 @RestController
 @RequestMapping("/orders")
 public class OrderController {
 
-    private final OrderService orderService;
+    @Autowired
+    private OrderService orderService;
 
-    public OrderController(OrderService orderService) {
-        this.orderService = orderService;
-    }
-
-    // 健康检查
     @GetMapping("/hello")
     public Result<String> hello() {
         return Result.success("inknexus-order is running");
     }
 
-    // 下单：userId 由网关鉴权后透传，不从请求体取
     @PostMapping
     public Result<OrderDetailVO> createOrder(@RequestHeader("X-User-Id") Long userId,
                                              @Valid @RequestBody OrderCreateRequest request) {
@@ -41,20 +38,17 @@ public class OrderController {
         return Result.success(detail);
     }
 
-    // 购物车下单：只接收收货信息，图书和数量来自购物车中已选条目
     @PostMapping("/from-cart")
     public Result<OrderDetailVO> createOrderFromCart(@RequestHeader("X-User-Id") Long userId,
                                                      @Valid @RequestBody OrderFromCartRequest request) {
         return Result.success(orderService.createOrderFromCart(userId, request));
     }
 
-    // 查询当前用户的订单列表
     @GetMapping
     public Result<List<OrderVO>> listOrders(@RequestHeader("X-User-Id") Long userId) {
         return Result.success(orderService.listOrdersByUserId(userId));
     }
 
-    // 查询订单详情
     @GetMapping("/{id}")
     public Result<OrderDetailVO> getOrderDetail(@RequestHeader("X-User-Id") Long userId,
                                                 @PathVariable("id") Long id) {
@@ -65,18 +59,17 @@ public class OrderController {
         return Result.success(detail);
     }
 
-    // 取消订单
     @PutMapping("/{id}/cancel")
     public Result<String> cancelOrder(@RequestHeader("X-User-Id") Long userId,
                                       @PathVariable("id") Long id) {
         boolean cancelled = orderService.cancelOrder(id, userId);
+        // false 可能是订单不存在、非本人或状态不允许，对外统一按 404 语义返回
         if (!cancelled) {
             return Result.fail(404, "订单不存在");
         }
         return Result.success("取消成功");
     }
 
-    // 确认收货：只允许当前用户把已支付订单标记为已完成
     @PutMapping("/{id}/complete")
     public Result<String> completeOrder(@RequestHeader("X-User-Id") Long userId,
                                         @PathVariable("id") Long id) {

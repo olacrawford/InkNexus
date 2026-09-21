@@ -20,11 +20,17 @@ import org.springframework.context.annotation.Configuration;
 @EnableRabbit
 public class RabbitMqConfig {
 
+    /**
+     * 支付成功事件交换机：payment 服务发布支付成功消息、本服务消费的入口拓扑。
+     */
     @Bean
     public TopicExchange paySuccessExchange() {
         return new TopicExchange(InkNexusRabbitMq.PAY_SUCCESS_EXCHANGE, true, false);
     }
 
+    /**
+     * 支付成功消费队列，由 {@link PaySuccessConsumer} 监听，驱动订单状态 0→1。
+     */
     @Bean
     public Queue paySuccessQueue() {
         // payment 服务声明同名队列，死信参数必须与这里完全一致（RabbitMQ 等价声明校验）
@@ -41,20 +47,28 @@ public class RabbitMqConfig {
                 .with(InkNexusRabbitMq.PAY_SUCCESS_ROUTING_KEY);
     }
 
+    /**
+     * 订单-库存事件交换机：库存确认（订单已支付）与库存释放（取消/超时/补偿）事件都从这里路由给 stock 服务。
+     */
     @Bean
     public TopicExchange orderStockExchange() {
         return new TopicExchange(InkNexusRabbitMq.ORDER_STOCK_EXCHANGE, true, false);
     }
 
+    /**
+     * 库存确认队列：由 stock 服务消费，把预占库存转为实际扣减。
+     */
     @Bean
     public Queue orderPaidQueue() {
-        // stock 服务声明同名队列，死信参数必须与这里完全一致
         return QueueBuilder.durable(InkNexusRabbitMq.ORDER_PAID_QUEUE)
                 .deadLetterExchange(InkNexusRabbitMq.DLX_EXCHANGE)
                 .deadLetterRoutingKey(InkNexusRabbitMq.DLX_KEY_ORDER_PAID)
                 .build();
     }
 
+    /**
+     * 库存释放队列：由 stock 服务消费，归还用户取消、超时关单、下单补偿场景下的预占库存。
+     */
     @Bean
     public Queue orderStockReleaseQueue() {
         return QueueBuilder.durable(InkNexusRabbitMq.ORDER_STOCK_RELEASE_QUEUE)
@@ -98,6 +112,9 @@ public class RabbitMqConfig {
         return new DirectExchange(InkNexusRabbitMq.ORDER_CLOSE_EXCHANGE, true, false);
     }
 
+    /**
+     * 关单队列：延迟队列 TTL 到期后死信投递到这里，由本服务 {@link OrderCloseDelayConsumer} 消费。
+     */
     @Bean
     public Queue orderCloseQueue() {
         return QueueBuilder.durable(InkNexusRabbitMq.ORDER_CLOSE_QUEUE)

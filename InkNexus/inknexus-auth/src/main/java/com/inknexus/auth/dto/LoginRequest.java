@@ -3,6 +3,9 @@ package com.inknexus.auth.dto;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+/**
+ * 登录请求体（POST /auth/login）。
+ */
 @Data
 public class LoginRequest {
 

@@ -15,18 +15,15 @@ public class PageResult<T> {
 
     /** 当前页数据 */
     private List<T> records;
-    /** 总条数 */
     private long total;
-    /** 总页数 */
     private long pages;
-    /** 当前页码 */
     private long current;
-    /** 每页条数 */
     private long size;
 
     public PageResult() {
     }
 
+    /** 全参构造：字段顺序对应 MyBatis-Plus IPage，service 层用它把查询结果转成本结构。 */
     public PageResult(List<T> records, long total, long pages, long current, long size) {
         this.records = records;
         this.total = total;

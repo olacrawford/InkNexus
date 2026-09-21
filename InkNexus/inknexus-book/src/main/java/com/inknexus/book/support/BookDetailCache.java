@@ -16,30 +16,33 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * 图书详情缓存：手写 Cache-Aside，落地缓存击穿与穿透的防护。
- *
- * <p>防击穿（互斥重建）：缓存未命中时先 {@code SETNX} 抢互斥锁，只有一个线程回源 MySQL 重建，
- * 其余线程自旋等待后读新缓存；抢到锁的线程重建前再查一次缓存（双重检查）。
- * 锁带 TTL 防死锁，释放用 Lua 脚本「校验锁值再删除」原子完成，避免误删其它持有者的锁。
- *
- * <p>防穿透（空值缓存）：数据库里不存在的 id 也写入短 TTL 的空值标记，
- * 恶意反复查询不存在的图书时直接命中空值标记，不再打到 MySQL。
+ * 图书详情缓存：手写 Cache-Aside，{@code BookServiceImpl.getBookById} 的详情读取全部经此（存 BookDetailVO 的 JSON 串）。
+ * 防击穿：未命中先 {@code SETNX} 抢互斥锁（带 TTL 防死锁），单线程回源重建、其余自旋等新缓存，释放用 Lua「校验锁值再删」防误删；
+ * 防穿透：不存在的 id 写短 TTL 空值标记；防雪崩：数据 TTL 叠 ±10% 抖动；键布局：数据 {@code cache:book:detail:{id}}、锁 {@code cache:book:detail:lock:{id}}。
  */
 @Slf4j
 @Component
 public class BookDetailCache {
 
+    /** 详情数据键前缀，完整键为 cache:book:detail:{id} */
     static final String KEY_PREFIX = "cache:book:detail:";
+    /** 互斥锁键前缀，完整键为 cache:book:detail:lock:{id}，与数据键一一对应 */
     static final String LOCK_PREFIX = "cache:book:detail:lock:";
+    /** 空值标记内容：命中即代表「图书确认不存在」，防穿透 */
     static final String NULL_MARK = "__NULL__";
 
+    /** 正常数据的基准 TTL，写入时叠加 ±10% 抖动 */
     static final Duration DATA_TTL = Duration.ofMinutes(30);
+    /** 空值标记 TTL：比数据短，给「稍后新增该书」留恢复窗口 */
     static final Duration NULL_TTL = Duration.ofMinutes(2);
+    /** 互斥锁 TTL：持锁线程崩溃后锁最多残留这么久，防死锁 */
     static final Duration LOCK_TTL = Duration.ofSeconds(10);
 
     /** TTL 随机抖动比例：±10%，避免同批 key 同时到期引发雪崩 */
     private static final double JITTER_RATIO = 0.1;
+    /** 未抢到锁后的自旋间隔（毫秒） */
     private static final long SPIN_INTERVAL_MS = 50;
+    /** 自旋上限次数：50ms × 20 ≈ 1s，超过则放弃等待直接回源 */
     private static final int SPIN_MAX_TIMES = 20;
 
     /** 校验锁值后删除：锁值不匹配（锁已过期被他人持有）时不删除 */
@@ -47,34 +50,16 @@ public class BookDetailCache {
             "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
             Long.class);
 
-    private final StringRedisTemplate redisTemplate;
-    private final ObjectMapper objectMapper;
-    private final Random random = new Random();
-    private final long spinIntervalMs;
-    private final int spinMaxTimes;
-
-    /** 存在多个构造器时用 @Autowired 标注 Spring 应使用的入口 */
     @Autowired
-    public BookDetailCache(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
-        this(redisTemplate, objectMapper, SPIN_INTERVAL_MS, SPIN_MAX_TIMES);
-    }
+    private StringRedisTemplate redisTemplate;
+    @Autowired
+    private ObjectMapper objectMapper;
+    private final Random random = new Random();
+    /** 自旋参数默认值，包内可见仅供单元测试缩短等待 */
+    private long spinIntervalMs = SPIN_INTERVAL_MS;
+    private int spinMaxTimes = SPIN_MAX_TIMES;
 
-    /** 自旋参数可注入，仅供单元测试缩短等待 */
-    BookDetailCache(StringRedisTemplate redisTemplate, ObjectMapper objectMapper,
-                    long spinIntervalMs, int spinMaxTimes) {
-        this.redisTemplate = redisTemplate;
-        this.objectMapper = objectMapper;
-        this.spinIntervalMs = spinIntervalMs;
-        this.spinMaxTimes = spinMaxTimes;
-    }
-
-    /**
-     * 按详情缓存读取，未命中时用 loader 回源并重建缓存。
-     *
-     * @param id     图书 id
-     * @param loader 缓存未命中时的回源逻辑（查 MySQL）
-     * @return 图书详情，图书不存在返回 null
-     */
+    /** 读详情缓存：未命中抢锁回源重建，命中空值标记返回 null，自旋等不到新缓存时直接回源兜底保证可用性 */
     public BookDetailVO load(Long id, Supplier<BookDetailVO> loader) {
         String key = KEY_PREFIX + id;
 
@@ -91,6 +76,7 @@ public class BookDetailCache {
         }
 
         String lockKey = LOCK_PREFIX + id;
+        // 锁值用随机 UUID 标识本次持有者，解锁时校验防止误删他人的锁
         String lockValue = UUID.randomUUID().toString();
         Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, lockValue, LOCK_TTL);
         if (Boolean.TRUE.equals(locked)) {
@@ -111,11 +97,12 @@ public class BookDetailCache {
                     redisTemplate.opsForValue().set(key, NULL_MARK, NULL_TTL);
                     return null;
                 }
+                // 正常数据写入，TTL 叠加 ±10% 抖动让同批重建的 key 过期时间错开（防雪崩）
                 redisTemplate.opsForValue().set(key, toJson(vo), jitteredTtl(DATA_TTL));
                 log.info("详情缓存未命中，互斥重建完成：bookId={}", id);
                 return vo;
             } finally {
-                // Lua 原子「校验锁值再删除」：只删自己持有的锁
+                // Lua 原子「校验锁值再删」：只删自己持有的锁
                 redisTemplate.execute(UNLOCK_SCRIPT, List.of(lockKey), lockValue);
             }
         }
@@ -165,6 +152,7 @@ public class BookDetailCache {
         }
     }
 
+    /** 序列化为 JSON；失败属于严重错误，直接抛出中断本次重建（不影响已写入的数据） */
     private String toJson(BookDetailVO vo) {
         try {
             return objectMapper.writeValueAsString(vo);
@@ -175,6 +163,7 @@ public class BookDetailCache {
 
     /** TTL 随机抖动：基准 ±JITTER_RATIO，同批写入的 key 过期时间错开 */
     private Duration jitteredTtl(Duration base) {
+        // 均匀取值于 [1-ratio, 1+ratio) 倍基准毫秒数，下限钳到 1ms 防止出现 0（Redis 视为永久键）
         long ms = base.toMillis();
         long jittered = (long) (ms * (1 - JITTER_RATIO + random.nextDouble() * 2 * JITTER_RATIO));
         return Duration.ofMillis(Math.max(jittered, 1));

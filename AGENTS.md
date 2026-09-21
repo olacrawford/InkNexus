@@ -13,7 +13,7 @@ The Git root is this directory. The project is named 墨枢 InkNexus; Maven modu
   - `inknexus-order` (8050): direct/cart orders, paid-stock confirmation, timeout close, and OpenFeign calls to book, cart, and stock services.
   - `inknexus-payment` (8051): mock payment records and order paid-state updates via OpenFeign.
   - `inknexus-gateway` (8080): routing, JWT validation, and `X-User-Id` / `X-User-Role` passthrough (book write endpoints require the ADMIN role from the JWT `role` claim); generates/passes `X-Trace-Id` for cross-service log correlation (services write it to MDC via `com.inknexus.common.trace.TraceIdFilter`).
-  - `inknexus-ai` (8071): read-only chatbot using LangChain4j + DashScope (Qwen); SSE streaming via `POST /ai/chat/stream` (`TokenStream` + `SseEmitter`, `/ai/chat` is the fallback); session memory in Redis; calls book/order via OpenFeign.
+  - `inknexus-ai` (8071): read-only chatbot using Spring AI (`ChatClient` + DeepSeek `deepseek-chat`); SSE streaming via `POST /ai/chat/stream` (`Flux<ServerSentEvent>` with `meta`/`delta`/`done` events, `/ai/chat` is the fallback); session memory in Redis via a custom `ChatMemoryRepository` (`RedisChatMemoryRepository`); tools get `userId` from `ToolContext`; calls book/order via OpenFeign.
   - Async flow via RabbitMQ: `inknexus-payment` publishes pay-success events; `inknexus-order` consumes them to mark orders paid; `inknexus-order` and `inknexus-stock` exchange stock confirm/release events; order-timeout close runs on a RabbitMQ TTL+dead-letter delay queue declared in `inknexus-order`'s `RabbitMqConfig` (queue-level TTL = `expire-minutes`; `OrderTimeoutTask` is only a backstop sweep). Producers/consumers live in each module's `mq` package. Stock confirm/release consumption is idempotent per message `eventId` via `t_mq_consumed_log` (dedup insert and stock update share one transaction). All business queues carry dead-letter args into `inknexus.dlx.queue` after listener retry exhaustion (`default-requeue-rejected: false`), and publishers register confirm/returns callbacks in each module's `RabbitReliabilityConfig`.
 - REST APIs are documented with Knife4j (springdoc) in each service.
 - `front/`: Vue 3 + Vite app under `front/src/` — axios wrapper and endpoints in `src/api/` (`http.js`, `inknexus.js`, `result.js` for unwrapping `Result`), session helpers in `src/utils/`, views in `src/views/` (Home, Books, Cart, Orders, Address, Login, AiChat).
@@ -29,7 +29,7 @@ The Git root is this directory. The project is named 墨枢 InkNexus; Maven modu
 
 Use `mvn -f InkNexus/pom.xml -q clean package` to compile all backend modules, and `mvn -f InkNexus/pom.xml -q test` to run backend tests. Run `mvn -f InkNexus/pom.xml -DskipTests install` once, then start one service with `mvn -f InkNexus/pom.xml -pl inknexus-auth spring-boot:run`; replace the module name as needed. Do not use `-am` with `spring-boot:run`, because it also runs the parent POM, which has no main class. Start auth, book, cart, stock, order, and payment before the gateway; `inknexus-ai` is independent and can run after the gateway.
 
-`inknexus-ai` needs the DashScope API key as `DASHSCOPE_API_KEY` env var (never commit it); its Spring config lives in `nacos-config/ai-assistant.yaml`.
+`inknexus-ai` needs the DeepSeek API key as `DEEPSEEK_API_KEY` env var (never commit it); its Spring config lives in `nacos-config/ai-assistant.yaml` (`spring.ai.deepseek.*`).
 
 On Apple Silicon, the gateway gets the correct Netty native library through the `macos-arm64` Maven profile in `inknexus-gateway/pom.xml`.
 

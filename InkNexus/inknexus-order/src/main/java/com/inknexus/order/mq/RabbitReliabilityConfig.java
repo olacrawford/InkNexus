@@ -19,6 +19,10 @@ import java.nio.charset.StandardCharsets;
 @Configuration
 public class RabbitReliabilityConfig {
 
+    /**
+     * 给自动装配的 RabbitTemplate 挂 confirm / returns 回调：
+     * nack 与不可路由只记 ERROR 日志兜底，不做自动补偿、不阻塞业务线程。
+     */
     @Bean
     public RabbitTemplateCustomizer rabbitReliabilityCustomizer() {
         return template -> {

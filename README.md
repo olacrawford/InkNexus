@@ -18,8 +18,8 @@
 
 | 分类 | 技术 |
 |---|---|
-| 后端 | Java 17, Spring Boot 3.2.5 |
-| 微服务 | Spring Cloud 2023.0.2, Spring Cloud Alibaba 2023.0.1.0 |
+| 后端 | Java 17, Spring Boot 3.5.16 |
+| 微服务 | Spring Cloud 2025.0.3, Spring Cloud Alibaba 2025.0.0.0 |
 | 注册发现 | Nacos |
 | 配置中心 | Nacos Config |
 | 接口文档 | Knife4j |
@@ -54,7 +54,7 @@ InkNexus/
 | `inknexus-stock` | 8090 | 库存查询、下单预占、支付确认、取消释放 |
 | `inknexus-order` | 8050 | 订单（直接下单、购物车下单、列表、详情、取消、超时自动关单） |
 | `inknexus-payment` | 8051 | 支付单、内部模拟支付、发布支付成功事件触发订单异步更新与库存确认 |
-| `inknexus-ai` | 8071 | AI 问答助手：LangChain4j + DashScope 通义千问，只读调用图书/订单，会话记忆存 Redis |
+| `inknexus-ai` | 8071 | AI 问答助手：Spring AI + DeepSeek（deepseek-chat），只读调用图书/订单，会话记忆存 Redis |
 | `front` | 5173 | 前端，Vite 托管 |
 
 ## 系统架构
@@ -162,10 +162,10 @@ mkdir -p logs/sentinel
 mvn -f InkNexus/pom.xml -pl inknexus-book spring-boot:run "-Dspring-boot.run.jvmArguments=-Dcsp.sentinel.log.dir=${PWD}/logs/sentinel"
 ```
 
-启动 `inknexus-ai` 前需设置通义千问 Key：
+启动 `inknexus-ai` 前需设置 DeepSeek API Key：
 
 ```bash
-export DASHSCOPE_API_KEY='sk-你的通义千问Key'
+export DEEPSEEK_API_KEY='sk-你的DeepSeek密钥'
 ```
 
 命令行启动方式：先安装公共模块，再按需替换模块名启动（不要对 `spring-boot:run` 使用 `-am`，否则会尝试在父工程上找启动类）：

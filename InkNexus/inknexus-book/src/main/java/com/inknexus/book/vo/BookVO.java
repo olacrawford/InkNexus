@@ -4,8 +4,12 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 
+/**
+ * 图书列表项 VO：列表 / 分页 / 按 id 批量查询（GET /books、/books/page、/books/by-ids）的返回载荷。
+ * <p>只带封面级简单字段，不含简介等重内容；BookDetailVO 才是详情载荷。
+ * 保留无参构造器以满足 JSON 反序列化需要。
+ */
 @Data
-//查询图书简单信息
 public class BookVO {
     private Long id;
     private String title;

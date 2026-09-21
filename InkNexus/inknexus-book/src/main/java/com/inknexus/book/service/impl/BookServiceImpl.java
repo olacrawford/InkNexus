@@ -14,6 +14,7 @@ import com.inknexus.book.vo.BookDetailVO;
 import com.inknexus.book.vo.BookVO;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.PageResult;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -22,40 +23,38 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * 图书业务实现：读多写少。列表/分页走 SpringCache 的 books 缓存，单本详情走
+ * {@link BookDetailCache} 手写 Cache-Aside（防击穿/穿透）；写路径统一「先写库、再失效缓存」，
+ * 由 @CacheEvict(allEntries) 清列表/分页并精确驱逐详情缓存，残余不一致靠短 TTL 兜底。
+ */
 @Service
 public class BookServiceImpl implements BookService {
 
-    private final BookMapper bookMapper;
-    private final BookDetailCache detailCache;
-
-    //构造注入mapper与详情缓存组件
-    public BookServiceImpl(BookMapper bookMapper, BookDetailCache detailCache) {
-        this.bookMapper = bookMapper;
-        this.detailCache = detailCache;
-    }
+    @Autowired
+    private BookMapper bookMapper;
+    @Autowired
+    private BookDetailCache detailCache;
 
     /**
-     * 查询所有上架图书列表
-     * @return 图书VO集合
+     * 查询所有上架图书；无参方法缓存 key 为 SimpleKey.EMPTY，与 pageBooks 的参数 key 互不覆盖
      */
     @Override
     @Cacheable(cacheNames = "books")
     @SentinelResource(value = "listBooks", blockHandler = "listBooksBlocked")
     public List<BookVO> listBooks() {
-        //只查询状态=1（上架）的图书，entity转为VO返回
         return bookMapper.selectList(
                 new LambdaQueryWrapper<Book>().eq(Book::getStatus, 1)
         ).stream().map(this::toBookVO).collect(Collectors.toList());
     }
 
-    // 限流触发时返回友好提示
     public List<BookVO> listBooksBlocked(BlockException e) {
         throw new BusinessException(429, "图书列表请求过于频繁，请稍后再试");
     }
 
     /**
-     * 按 id 批量查询上架图书：一条 IN 查询替代逐本 select，
-     * 只返回存在且上架的图书，缺失的由调用方（订单服务）判定报错
+     * 按 id 批量查询上架图书：一条 IN 查询替代逐本 select，只返回存在且上架的，
+     * 缺失的由调用方（订单服务）判定报错
      */
     @Override
     public List<BookVO> listBooksByIds(List<Long> ids) {
@@ -69,22 +68,15 @@ public class BookServiceImpl implements BookService {
         ).stream().map(this::toBookVO).collect(Collectors.toList());
     }
 
-    // 限流触发时返回友好提示
     public BookDetailVO getBookByIdBlocked(BlockException e) {
         throw new BusinessException(429, "图书详情请求过于频繁，请稍后再试");
     }
 
-    // 限流触发时返回友好提示
     public PageResult<BookVO> pageBooksBlocked(BlockException e) {
         throw new BusinessException(429, "图书分页请求过于频繁，请稍后再试");
     }
 
-    /**
-     * 根据id查询图书详情
-     * <p>详情走手写 Cache-Aside：互斥重建防击穿、空值缓存防穿透（见 {@link BookDetailCache}）
-     * @param id 图书id
-     * @return 图书详情VO，不存在返回null
-     */
+    /** 查询图书详情；详情走手写 Cache-Aside 防击穿/穿透（见 {@link BookDetailCache}），不存在返回 null */
     @Override
     @SentinelResource(value = "getBookById", blockHandler = "getBookByIdBlocked")
     public BookDetailVO getBookById(Long id) {
@@ -99,46 +91,34 @@ public class BookServiceImpl implements BookService {
     }
 
     /**
-     * 图书分页查询，支持书名关键词和分类精确筛选
-     * @param pageNum 页码
-     * @param pageSize 每页条数
-     * @param keyword 书名搜索关键词
-     * @param categoryId 分类id（精确匹配，不包含子分类）
-     * @return 分页结果对象
+     * 分页查询图书，支持书名关键词与分类精确筛选；
+     * 每组参数各占一个 books 缓存条目，任何写操作 allEntries 全清避免脏读旧分页
      */
     @Override
     @Cacheable(cacheNames = "books")
     @SentinelResource(value = "pageBooks", blockHandler = "pageBooksBlocked")
     public PageResult<BookVO> pageBooks(Integer pageNum, Integer pageSize, String keyword, Long categoryId) {
-        //页码、页大小容错处理，为空或小于1给默认值
         long currentPage = pageNum == null || pageNum < 1 ? 1 : pageNum;
         long size = pageSize == null || pageSize < 1 ? 10 : pageSize;
 
         LambdaQueryWrapper<Book> wrapper = new LambdaQueryWrapper<Book>()
                 .eq(Book::getStatus, 1)
-                //关键词不为空才执行like模糊查询
                 .like(keyword != null && !keyword.isBlank(), Book::getTitle, keyword)
-                //分类不为空才按分类精确筛选
                 .eq(categoryId != null, Book::getCategoryId, categoryId)
                 .orderByDesc(Book::getId);
 
-        //mybatis‑plus分页对象
         Page<Book> page = new Page<>(currentPage, size);
         bookMapper.selectPage(page, wrapper);
 
-        //entity转VO
         List<BookVO> records = page.getRecords().stream()
                 .map(this::toBookVO)
                 .collect(Collectors.toList());
 
-        //封装自定义分页返回对象
         return new PageResult<>(records, page.getTotal(), page.getPages(), page.getCurrent(), page.getSize());
     }
 
     /**
-     * 新增图书
-     * @param request 新增图书请求DTO
-     * @return 新增完成的图书详情VO
+     * 新增图书（固定上架 status=1）；allEntries 全清是因为新书上架会改变「全部图书」的查询结果
      */
     @Override
     @CacheEvict(cacheNames = "books", allEntries = true)
@@ -158,12 +138,7 @@ public class BookServiceImpl implements BookService {
         return toDetailVO(book);
     }
 
-    /**
-     * 修改图书信息
-     * @param id 图书id
-     * @param request 修改请求DTO
-     * @return 修改后详情VO，图书不存在返回null
-     */
+    /** 修改图书（全量替换语义），图书不存在返回 null */
     @Override
     @CacheEvict(cacheNames = "books", allEntries = true)
     public BookDetailVO updateBook(Long id, BookUpdateRequest request) {
@@ -178,19 +153,20 @@ public class BookServiceImpl implements BookService {
         book.setCategoryId(request.getCategoryId());
         book.setCoverUrl(request.getCoverUrl());
         book.setDescription(request.getDescription());
+        // 状态完全由入参覆盖：0=下架、1=上架（update 语义为全量替换，未传字段校验已拦截）
         book.setStatus(request.getStatus());
         book.setUpdateTime(LocalDateTime.now());
 
+        // 先写库，成功后才失效缓存（Cache-Aside 的标准写时序）
         bookMapper.updateById(book);
-        // 先更库后精确驱逐该本图书的详情缓存，避免全清带来的缓存命中率抖动
+        // 精确驱逐该本图书的详情缓存而非全清，避免缓存命中率抖动
         detailCache.evict(id);
         return toDetailVO(book);
     }
 
     /**
-     * 删除图书
-     * @param id 图书id
-     * @return true删除成功，false图书不存在
+     * 删除图书：@TableLogic 作用下的逻辑删除（UPDATE deleted=1），历史订单等关联数据不受影响；
+     * 图书不存在返回 false
      */
     @Override
     @CacheEvict(cacheNames = "books", allEntries = true)
@@ -204,9 +180,6 @@ public class BookServiceImpl implements BookService {
         return true;
     }
 
-    /**
-     * 转换：Book实体 → BookVO列表简单对象
-     */
     private BookVO toBookVO(Book book) {
         return new BookVO(
                 book.getId(),
@@ -218,9 +191,6 @@ public class BookServiceImpl implements BookService {
         );
     }
 
-    /**
-     * 转换：Book实体 → BookDetailVO详情对象
-     */
     private BookDetailVO toDetailVO(Book book) {
         return new BookDetailVO(
                 book.getId(),

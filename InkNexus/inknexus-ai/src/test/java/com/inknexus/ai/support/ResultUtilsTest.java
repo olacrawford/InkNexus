@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/** ResultUtils 的单元测试：验证 Result 按 code 解包与失败抛 BusinessException 的行为。 */
 class ResultUtilsTest {
 
     @Test

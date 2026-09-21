@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -21,9 +22,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@code UserServiceImpl} 注册/登录的纯单元测试：mock 掉 UserMapper，真实跑 BCrypt 与 JWT 编解码。
+ */
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
 
+    // HS256 要求密钥至少 32 字节，测试密钥必须满足该长度，否则 JwtUtil 构造即抛异常
     private static final String SECRET = "inknexus-auth-secret-key-20260827-0123456789";
 
     @Mock
@@ -35,7 +40,12 @@ class UserServiceImplTest {
     @BeforeEach
     void setUp() {
         jwtUtil = new JwtUtil(SECRET, 3600);
-        userService = new UserServiceImpl(userMapper, SECRET, 3600);
+        userService = new UserServiceImpl();
+        // 字段注入后由测试自行装配依赖与配置值，再触发 JwtUtil 构建
+        ReflectionTestUtils.setField(userService, "userMapper", userMapper);
+        ReflectionTestUtils.setField(userService, "secret", SECRET);
+        ReflectionTestUtils.setField(userService, "expireSeconds", 3600L);
+        userService.initJwt();
     }
 
     @Test

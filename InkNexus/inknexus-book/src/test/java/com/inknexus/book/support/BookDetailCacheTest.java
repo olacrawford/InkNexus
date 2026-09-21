@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -30,6 +31,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * BookDetailCache 缓存防护行为单测：mock Redis 操作，验证空值标记命中不回源、
+ * 互斥锁下双重检查后重建、锁的 Lua 释放、自旋等待与超时兜底回源等路径。
+ */
 @ExtendWith(MockitoExtension.class)
 class BookDetailCacheTest {
 
@@ -46,8 +51,12 @@ class BookDetailCacheTest {
 
     @BeforeEach
     void setUp() {
-        // 自旋间隔 1ms、最多 3 次，缩短测试耗时
-        cache = new BookDetailCache(redisTemplate, objectMapper, 1, 3);
+        // 字段注入后由测试装配依赖；自旋间隔 1ms、最多 3 次，缩短测试耗时
+        cache = new BookDetailCache();
+        ReflectionTestUtils.setField(cache, "redisTemplate", redisTemplate);
+        ReflectionTestUtils.setField(cache, "objectMapper", objectMapper);
+        ReflectionTestUtils.setField(cache, "spinIntervalMs", 1L);
+        ReflectionTestUtils.setField(cache, "spinMaxTimes", 3);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
     }
 

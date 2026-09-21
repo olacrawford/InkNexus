@@ -8,10 +8,12 @@ import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.util.List;
 
+/**
+ * 购物车服务 Feign 客户端：购物车下单前读取当前用户已勾选的条目。
+ */
 @FeignClient(name = "cart")
 public interface CartClient {
 
-    // 订单服务通过 Nacos 服务名读取当前用户已勾选的购物车条目
     @GetMapping("/cart/selected")
     Result<List<CartItemSnapshot>> selectedItems(@RequestHeader("X-User-Id") Long userId);
 }

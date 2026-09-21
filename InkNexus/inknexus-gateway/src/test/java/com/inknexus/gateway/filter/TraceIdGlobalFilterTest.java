@@ -21,6 +21,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link TraceIdGlobalFilter} 生成/透传链路编号与过滤器执行顺序的单元测试。
+ */
 @ExtendWith(MockitoExtension.class)
 class TraceIdGlobalFilterTest {
 

@@ -26,7 +26,9 @@ import java.util.UUID;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class TraceIdFilter extends OncePerRequestFilter {
 
+    /** 链路编号透传的请求/响应头名，与网关 TraceIdGlobalFilter、Feign 拦截器共用同一约定 */
     public static final String TRACE_ID_HEADER = "X-Trace-Id";
+    /** MDC key，日志 pattern 通过 %X{traceId} 引用 */
     public static final String MDC_TRACE_ID = "traceId";
 
     @Override

@@ -26,8 +26,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -45,6 +47,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * OrderServiceImpl 纯单元测试：mock 全部 mapper/Feign/MQ 发布器，不启动 Spring 容器，
+ * 重点守住下单幂等补偿、价格快照与“库存事件只发一次”等不变量。
+ */
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplTest {
 
@@ -61,8 +67,11 @@ class OrderServiceImplTest {
     @Mock
     private OrderEventPublisher orderEventPublisher;
 
+    @InjectMocks
     private OrderServiceImpl orderService;
 
+    // 纯单测没有 MyBatis 运行环境，提前注册实体元数据，
+    // 否则 Lambda 条件构造器无法解析 Order::getStatus 等方法引用对应的列名
     @BeforeAll
     static void initMybatisPlusTableInfo() {
         MybatisConfiguration configuration = new MybatisConfiguration();
@@ -73,9 +82,8 @@ class OrderServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderServiceImpl(
-                orderMapper, orderItemMapper, bookClient, cartClient,
-                stockClient, orderEventPublisher, 30);
+        // @Value 配置字段由测试注入，与 Nacos 默认值保持一致（30 分钟）
+        ReflectionTestUtils.setField(orderService, "orderExpireMinutes", 30);
     }
 
     @Test

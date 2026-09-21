@@ -17,11 +17,17 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMqConfig {
 
+    /**
+     * 支付成功事件交换机：本服务发布、order 服务消费，topic 类型便于按事件类别路由。
+     */
     @Bean
     public TopicExchange paySuccessExchange() {
         return new TopicExchange(InkNexusRabbitMq.PAY_SUCCESS_EXCHANGE, true, false);
     }
 
+    /**
+     * 支付成功事件队列，由 order 服务监听。
+     */
     @Bean
     public Queue paySuccessQueue() {
         // order 服务声明同名队列，死信参数必须与这里完全一致（RabbitMQ 等价声明校验）

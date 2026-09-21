@@ -22,26 +22,27 @@ import java.time.Duration;
 @Configuration
 public class RedisConfig {
 
+    /** 非锁 writer（不做缓存级互斥，读多写少吞吐优先），外套抖动装饰器 ratio=0.1，与 BookDetailCache 手写抖动保持同比例 */
     @Bean
     public RedisCacheWriter redisCacheWriter(RedisConnectionFactory factory) {
         return new JitterRedisCacheWriter(
                 RedisCacheWriter.nonLockingRedisCacheWriter(factory), 0.1);
     }
 
+    /** CacheManager 装配：默认基准 TTL 30 分钟，按 cacheName 覆盖差异化基准 TTL，落盘前统一再经抖动 writer */
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory factory, RedisCacheWriter writer) {
         return RedisCacheManager.builder(writer)
                 .cacheDefaults(baseConfig().entryTtl(Duration.ofMinutes(30)))
                 // 分类数据变化少：基准 TTL 更长
                 .withCacheConfiguration("category", baseConfig().entryTtl(Duration.ofMinutes(60)))
-                // 图书列表 / 分页
                 .withCacheConfiguration("books", baseConfig().entryTtl(Duration.ofMinutes(30)))
                 .build();
     }
 
+    /** 公共缓存配置：JSON 序列化（写入 @class 类型信息，读出可还原 PageResult 等原类型）；null 不落缓存 */
     private RedisCacheConfiguration baseConfig() {
         return RedisCacheConfiguration.defaultCacheConfig()
-                // 列表/分页缓存不存 null（穿透防护由详情空值缓存负责）
                 .disableCachingNullValues()
                 .serializeValuesWith(RedisSerializationContext.SerializationPair
                         .fromSerializer(new GenericJackson2JsonRedisSerializer()));

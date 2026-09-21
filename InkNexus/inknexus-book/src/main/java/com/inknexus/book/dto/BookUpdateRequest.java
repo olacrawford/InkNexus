@@ -6,6 +6,11 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 
+/**
+ * 修改图书的入参载荷（管理端 PUT /books/{id} 请求体）。
+ * <p>与新增相比多一个必填 status（全量替换语义：0 下架、1 上架），
+ * 所有字段整体覆盖库中原值。
+ */
 @Data
 public class BookUpdateRequest {
 
@@ -24,6 +29,7 @@ public class BookUpdateRequest {
 
     private String description;
 
+    /** 上下架状态：1 上架、0 下架 */
     @NotNull(message = "状态不能为空")
     private Integer status;
 

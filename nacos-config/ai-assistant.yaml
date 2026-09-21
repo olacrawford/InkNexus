@@ -10,19 +10,20 @@ spring:
           default:
             connect-timeout: 3000
             read-timeout: 8000
-
-dashscope:
-  api-key: ${DASHSCOPE_API_KEY:}
-  base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  model: qwen-plus
-  temperature: 0.7
-  max-tokens: 1024
-  timeout: 30s
+  ai:
+    deepseek:
+      # 密钥走环境变量 DEEPSEEK_API_KEY，不硬编码、不入 Git
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
+          temperature: 0.7
+          max-tokens: 1024
 
 ai-assistant:
   chat:
     memory-ttl-hours: 2
-    tool-result-limit: 5
 # 日志带 TraceId：common 的 TraceIdFilter 把网关注入的 X-Trace-Id 写入 MDC，跨服务日志可串联
 logging:
   pattern:

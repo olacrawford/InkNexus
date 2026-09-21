@@ -9,6 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * {@link TraceIdFeignInterceptor} 透传/跳过 X-Trace-Id 请求头的单元测试。
+ */
 class TraceIdFeignInterceptorTest {
 
     private final TraceIdFeignInterceptor interceptor = new TraceIdFeignInterceptor();

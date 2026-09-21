@@ -11,25 +11,36 @@ import com.inknexus.cart.service.CartService;
 import com.inknexus.cart.vo.CartItemVO;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * 购物车业务实现。
+ * <p>核心设计：
+ * <ul>
+ *   <li>跨服务校验时序：加购先经 Feign 校验图书可购（校验在写库之前），失败直接抛业务异常，
+ *       事务回滚且不产生任何写操作；</li>
+ *   <li>并发安全：重复加购依赖数据库唯一键 uk_user_book + ON DUPLICATE KEY UPDATE 原子累加
+ *       （见 {@code CartItemMapper#insertOrUpdate}），不做"先查后插"；</li>
+ *   <li>不存价格快照：购物车只存 bookId 引用，价格以图书服务当前值为准，
+ *       下单时由订单服务实时取价并快照到订单条目，避免改价后购物车数据过期。</li>
+ * </ul>
+ */
 @Service
 public class CartServiceImpl implements CartService {
 
-    // mapper 负责持久化，BookClient 负责校验图书是否还存在并且是上架状态
-    private final CartItemMapper cartItemMapper;
-    private final BookClient bookClient;
+    @Autowired
+    private CartItemMapper cartItemMapper;
+    @Autowired
+    private BookClient bookClient;
 
-    public CartServiceImpl(CartItemMapper cartItemMapper, BookClient bookClient) {
-        this.cartItemMapper = cartItemMapper;
-        this.bookClient = bookClient;
-    }
-
+    /**
+     * 查询当前用户全部购物车条目，最近更新的在前
+     */
     @Override
-    // 只查询当前用户的购物车，按最近更新时间倒序展示
     public List<CartItemVO> list(Long userId) {
         List<CartItem> items = cartItemMapper.selectList(new LambdaQueryWrapper<CartItem>()
                 .eq(CartItem::getUserId, userId)
@@ -47,9 +58,13 @@ public class CartServiceImpl implements CartService {
         return items.stream().map(this::toVO).toList();
     }
 
+    /**
+     * 加购：先远程校验图书可购，校验通过才写库，远程失败不会留下脏数据；
+     * 事务同时覆盖 upsert 与回查，保证返回的是已合并数量后的最新行
+     * @throws BusinessException 400 图书不存在或已下架
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    // 校验图书后由数据库唯一键原子累加，写入和查询返回结果在同一个事务内
     public CartItemVO add(Long userId, CartItemCreateRequest request) {
         // 通过 Feign 调用图书服务，避免购物车服务直接信任前端传来的 bookId
         validateBook(request.getBookId());
@@ -64,8 +79,11 @@ public class CartServiceImpl implements CartService {
         return toVO(item);
     }
 
+    /**
+     * 修改数量/勾选状态；数量为覆盖式赋值，selected 为 null 时保持原勾选状态不变
+     * @throws BusinessException 404 条目不存在或不属于当前用户
+     */
     @Override
-    // 修改数量或勾选状态前，先确认该购物车条目属于当前用户
     public CartItemVO update(Long userId, Long cartItemId, CartItemUpdateRequest request) {
         CartItem item = getOwnedItem(userId, cartItemId);
         item.setQuantity(request.getQuantity());
@@ -76,15 +94,20 @@ public class CartServiceImpl implements CartService {
         return toVO(item);
     }
 
+    /**
+     * 删除单条购物车条目
+     * @throws BusinessException 404 条目不存在或不属于当前用户
+     */
     @Override
-    // 删除当前用户自己的购物车条目
     public void delete(Long userId, Long cartItemId) {
         CartItem item = getOwnedItem(userId, cartItemId);
         cartItemMapper.deleteById(item.getId());
     }
 
+    /**
+     * 清空当前用户购物车（删除条件带 userId，天然不会误删他人数据）
+     */
     @Override
-    // 清空操作只会删除当前用户的数据
     public void clear(Long userId) {
         cartItemMapper.delete(new LambdaQueryWrapper<CartItem>()
                 .eq(CartItem::getUserId, userId));
@@ -101,7 +124,11 @@ public class CartServiceImpl implements CartService {
         return item;
     }
 
-    // 远程调用图书服务时校验 Result.code，避免把远程失败误当成图书不存在
+    /**
+     * 校验加购的图书可购：上架过滤（status=1）由图书服务查询条件保证，下架书查不到返回 404；
+     * code!=200、data 为空或整个响应为 null 一律视为不可购，统一抛 400；
+     * Feign 调用本身异常（超时/服务不可用）不会被吞掉，会直接上抛中断加购
+     */
     private void validateBook(Long bookId) {
         Result<BookSnapshot> result = bookClient.getBookById(bookId);
         if (result == null || !Integer.valueOf(200).equals(result.getCode()) || result.getData() == null) {
@@ -109,6 +136,10 @@ public class CartServiceImpl implements CartService {
         }
     }
 
+    /**
+     * 实体 → VO；不含书名/价格，前端按 bookId 另查图书详情展示，
+     * 下单价格由订单服务在下单时实时校验并快照
+     */
     private CartItemVO toVO(CartItem item) {
         CartItemVO vo = new CartItemVO();
         vo.setId(item.getId());

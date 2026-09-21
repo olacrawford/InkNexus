@@ -18,7 +18,9 @@ import java.util.concurrent.CompletableFuture;
  */
 public class JitterRedisCacheWriter implements RedisCacheWriter {
 
+    /** 委托的实际执行写入的 writer（见 {@link RedisConfig} 中包装的非锁实现） */
     private final RedisCacheWriter delegate;
+    /** 抖动比例，RedisConfig 装配时取 0.1（±10%） */
     private final double ratio;
     private final Random random = new Random();
 
@@ -69,6 +71,7 @@ public class JitterRedisCacheWriter implements RedisCacheWriter {
 
     @Override
     public RedisCacheWriter withStatisticsCollector(CacheStatisticsCollector cacheStatisticsCollector) {
+        // 委托被替换成新实例时必须重新包一层抖动装饰器，否则统计开关会丢失抖动能力
         return new JitterRedisCacheWriter(
                 delegate.withStatisticsCollector(cacheStatisticsCollector), ratio);
     }

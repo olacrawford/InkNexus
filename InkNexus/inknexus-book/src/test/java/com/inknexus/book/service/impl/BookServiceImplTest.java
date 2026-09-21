@@ -7,10 +7,10 @@ import com.inknexus.book.support.BookDetailCache;
 import com.inknexus.book.vo.BookDetailVO;
 import com.inknexus.book.vo.BookVO;
 import com.inknexus.common.result.PageResult;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -25,6 +25,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * BookServiceImpl 的纯 Mockito 单测：mock Mapper 与详情缓存组件，
+ * 验证读路径的实体转 VO、详情经 BookDetailCache.load 委托回源、空入参短路等行为。
+ */
 @ExtendWith(MockitoExtension.class)
 class BookServiceImplTest {
 
@@ -33,12 +37,8 @@ class BookServiceImplTest {
     @Mock
     private BookDetailCache detailCache;
 
+    @InjectMocks
     private BookServiceImpl bookService;
-
-    @BeforeEach
-    void setUp() {
-        bookService = new BookServiceImpl(bookMapper, detailCache);
-    }
 
     @Test
     void listBooks_returnsMappedBookList() {

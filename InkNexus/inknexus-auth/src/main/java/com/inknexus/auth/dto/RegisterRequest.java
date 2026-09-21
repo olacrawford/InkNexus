@@ -3,6 +3,10 @@ package com.inknexus.auth.dto;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+/**
+ * 注册请求体（POST /auth/register）。
+ * <p>用户名全局唯一；昵称/手机号/邮箱为可选项。
+ */
 @Data
 public class RegisterRequest {
 

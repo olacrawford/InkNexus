@@ -25,6 +25,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link AuthGlobalFilter} 的鉴权与身份透传单元测试：纯 Mockito，不启动网关容器。
+ */
 @ExtendWith(MockitoExtension.class)
 class AuthGlobalFilterTest {
 

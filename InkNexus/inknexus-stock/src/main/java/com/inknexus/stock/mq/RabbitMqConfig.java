@@ -19,11 +19,17 @@ import org.springframework.context.annotation.Configuration;
 @EnableRabbit
 public class RabbitMqConfig {
 
+    /**
+     * 订单状态事件交换机：order 服务发布、本服务消费，topic 类型便于按事件类别路由。
+     */
     @Bean
     public TopicExchange orderStockExchange() {
         return new TopicExchange(InkNexusRabbitMq.ORDER_STOCK_EXCHANGE, true, false);
     }
 
+    /**
+     * 支付确认事件队列（order.paid 事件 → confirmStock）。
+     */
     @Bean
     public Queue orderPaidQueue() {
         // order 服务声明同名队列，死信参数必须与这里完全一致（RabbitMQ 等价声明校验）
@@ -33,6 +39,9 @@ public class RabbitMqConfig {
                 .build();
     }
 
+    /**
+     * 库存释放事件队列（order.stock.release 事件 → releaseStock）。
+     */
     @Bean
     public Queue orderStockReleaseQueue() {
         return QueueBuilder.durable(InkNexusRabbitMq.ORDER_STOCK_RELEASE_QUEUE)

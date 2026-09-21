@@ -9,10 +9,10 @@ import com.inknexus.stock.entity.BookStock;
 import com.inknexus.stock.mapper.MqConsumedLogMapper;
 import com.inknexus.stock.mapper.StockMapper;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -29,6 +29,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * StockServiceImpl 单元测试：覆盖消费幂等（去重/缺 eventId）、
+ * 释放的宽松补偿语义、确认的严格校验和预占库存不足回滚。
+ */
 @ExtendWith(MockitoExtension.class)
 class StockServiceImplTest {
 
@@ -40,6 +44,7 @@ class StockServiceImplTest {
     @Mock
     private MqConsumedLogMapper mqConsumedLogMapper;
 
+    @InjectMocks
     private StockServiceImpl stockService;
 
     @BeforeAll
@@ -47,11 +52,6 @@ class StockServiceImplTest {
         MybatisConfiguration configuration = new MybatisConfiguration();
         MapperBuilderAssistant assistant = new MapperBuilderAssistant(configuration, "");
         TableInfoHelper.initTableInfo(assistant, BookStock.class);
-    }
-
-    @BeforeEach
-    void setUp() {
-        stockService = new StockServiceImpl(stockMapper, mqConsumedLogMapper);
     }
 
     @Test

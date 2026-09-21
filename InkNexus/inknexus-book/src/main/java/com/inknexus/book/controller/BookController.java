@@ -10,28 +10,33 @@ import com.inknexus.book.vo.CategoryVO;
 import com.inknexus.common.result.PageResult;
 import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 图书与分类的 REST 入口（服务端口 8070）。
+ *
+ * <p>读接口（GET）公开，供门户与订单/购物车服务经 Feign 调用；
+ * 写接口（POST/PUT/DELETE）是管理端能力，需 ADMIN 角色（网关判权 + {@code AdminOnlyInterceptor} 兜底）。
+ * Controller 只做参数校验入口与结果包装，缓存与业务规则都在 Service 层。
+ */
 @RestController
 @RequestMapping("/books")
 public class BookController {
 
-    private final BookService bookService;
-    private final CategoryService categoryService;
+    @Autowired
+    private BookService bookService;
+    @Autowired
+    private CategoryService categoryService;
 
-    public BookController(BookService bookService, CategoryService categoryService) {
-        this.bookService = bookService;
-        this.categoryService = categoryService;
-    }
 
     @GetMapping("/hello")
     public Result<String> hello() {
         return Result.success("inknexus-book is running");
     }
 
-    // 查询所有图书
     @GetMapping
     public Result<List<BookVO>> listBooks() {
         return Result.success(bookService.listBooks());
@@ -43,9 +48,9 @@ public class BookController {
         return Result.success(bookService.listBooksByIds(ids));
     }
 
-    // 根据 ID 查询图书详情
     @GetMapping("/{id}")
     public Result<BookDetailVO> getBookById(@PathVariable("id") Long id) {
+        // Service 返回 null 代表「不存在 / 已下架」，这里转成 404 业务码而非抛异常
         BookDetailVO book = bookService.getBookById(id);
         if (book == null) {
             return Result.fail(404, "图书不存在");
@@ -53,7 +58,6 @@ public class BookController {
         return Result.success(book);
     }
 
-    // 分页查询（支持书名关键字 + 分类筛选）
     @GetMapping("/page")
     public Result<PageResult<BookVO>> pageBooks(
             @RequestParam(name = "pageNum", required = false) Integer pageNum,
@@ -63,13 +67,11 @@ public class BookController {
         return Result.success(bookService.pageBooks(pageNum, pageSize, keyword, categoryId));
     }
 
-    // 新增图书
     @PostMapping
     public Result<BookDetailVO> createBook(@Valid @RequestBody BookCreateRequest request) {
         return Result.success(bookService.createBook(request));
     }
 
-    // 修改图书
     @PutMapping("/{id}")
     public Result<BookDetailVO> updateBook(@PathVariable("id") Long id,
                                            @Valid @RequestBody BookUpdateRequest request) {
@@ -80,7 +82,6 @@ public class BookController {
         return Result.success(book);
     }
 
-    // 删除图书
     @DeleteMapping("/{id}")
     public Result<String> deleteBook(@PathVariable("id") Long id) {
         boolean deleted = bookService.deleteBook(id);
@@ -90,7 +91,6 @@ public class BookController {
         return Result.success("删除成功");
     }
 
-    // 获取普通分类列表
     @GetMapping("/categories")
     public Result<List<CategoryVO>> listCategories() {
         return Result.success(categoryService.listCategories());

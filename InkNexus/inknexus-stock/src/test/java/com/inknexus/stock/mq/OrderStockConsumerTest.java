@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
@@ -21,6 +22,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * OrderStockConsumer 单元测试：毒消息丢弃、事件去重跳过、
+ * 确认/释放事件分发及缺明细事件的忽略。
+ */
 @ExtendWith(MockitoExtension.class)
 class OrderStockConsumerTest {
 
@@ -33,7 +38,10 @@ class OrderStockConsumerTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        consumer = new OrderStockConsumer(objectMapper, stockService);
+        // 字段注入后由测试自行装配依赖
+        consumer = new OrderStockConsumer();
+        ReflectionTestUtils.setField(consumer, "objectMapper", objectMapper);
+        ReflectionTestUtils.setField(consumer, "stockService", stockService);
     }
 
     @Test

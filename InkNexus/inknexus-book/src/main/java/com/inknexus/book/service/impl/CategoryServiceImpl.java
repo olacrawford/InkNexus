@@ -8,21 +8,24 @@ import com.inknexus.book.mapper.CategoryMapper;
 import com.inknexus.book.service.CategoryService;
 import com.inknexus.book.vo.CategoryVO;
 import com.inknexus.common.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * 分类业务实现：只读接口，结果整体缓存进 SpringCache 的 category 缓存
+ * （基准 TTL 60 分钟，比 books 更长——分类变化频率低，见 {@code RedisConfig}）。
+ */
 @Service
 public class CategoryServiceImpl implements CategoryService {
 
-    private final CategoryMapper categoryMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
 
-    public CategoryServiceImpl(CategoryMapper categoryMapper) {
-        this.categoryMapper = categoryMapper;
-    }
-
+    /** 查询启用分类，按 sort 升序，结果整体缓存进 category 缓存 */
     @Override
     @Cacheable(cacheNames = "category")
     @SentinelResource(value = "listCategories", blockHandler = "listCategoriesBlocked")
@@ -40,7 +43,6 @@ public class CategoryServiceImpl implements CategoryService {
                 .collect(Collectors.toList());
     }
 
-    // 限流触发时返回友好提示
     public List<CategoryVO> listCategoriesBlocked(BlockException e) {
         throw new BusinessException(429, "分类列表请求过于频繁，请稍后再试");
     }

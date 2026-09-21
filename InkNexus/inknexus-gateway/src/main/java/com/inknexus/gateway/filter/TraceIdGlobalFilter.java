@@ -21,6 +21,7 @@ import java.util.UUID;
 @Component
 public class TraceIdGlobalFilter implements GlobalFilter, Ordered {
 
+    /** 链路编号请求/响应头名，与 common 的 TraceIdFilter、Feign 拦截器共用同一约定 */
     public static final String TRACE_ID_HEADER = "X-Trace-Id";
 
     @Override

@@ -5,53 +5,61 @@ import com.inknexus.ai.feign.dto.BookSnapshot;
 import com.inknexus.ai.feign.dto.CategorySnapshot;
 import com.inknexus.ai.support.ResultUtils;
 import com.inknexus.common.result.PageResult;
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
-import lombok.RequiredArgsConstructor;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.List;
 
-/** 图书查询工具：暴露给 AI 模型使用的 @Tool，内部只读调用 book 服务，不写任何数据。 */
+/**
+ * 图书查询工具：暴露给 AI 模型使用的 @Tool，内部只读调用 book 服务，不写任何数据。
+ * 图书数据与用户身份无关，调用不依赖 X-User-Id。工具返回结构化对象，
+ * 由 Spring AI 统一序列化为 JSON 进入模型上下文；失败时抛异常，
+ * 交给 ToolExecutionExceptionProcessor 转成模型可读的失败说明。
+ */
 @Component
-@RequiredArgsConstructor
 public class QueryBookTool {
 
-    private final BookFeignClient bookFeignClient;
+    @Autowired
+    private BookFeignClient bookFeignClient;
 
-    /** @Tool 表示这是个“可被模型调用”的工具；@P 是参数说明，模型据此决定要传什么。 */
-    @Tool("按书名关键字搜索图书，返回前 N 条图书摘要（书名/作者/价格）")
-    public String searchBooks(@P("keyword") String keyword, @P("topN") Integer topN) {
+    @Tool(description = "按书名关键字搜索图书，返回图书摘要列表（书名/作者/价格）")
+    public List<BookBrief> searchBooks(@ToolParam(description = "搜索关键词：书名或作者名") String keyword,
+                                       @ToolParam(description = "返回条数，不传默认5，最大10", required = false) Integer topN) {
         if (keyword == null || keyword.isBlank()) {
-            return "请提供搜索关键词";
+            throw new IllegalArgumentException("搜索关键词不能为空");
         }
         // topN 默认 5，最多 10，避免模型一次拿太多数据撑爆上下文
         int limit = topN == null ? 5 : Math.min(topN, 10);
-        // 调 book 服务分页接口（第 1 页、limit 条、按 keyword 过滤），并用 ResultUtils 解出真实数据
         PageResult<BookSnapshot> page = ResultUtils.data(
                 bookFeignClient.pageBooks(1, limit, keyword, null));
-        if (page == null || page.getRecords() == null || page.getRecords().isEmpty()) {
-            return "没有找到相关图书，可换个关键词试试";
+        if (page == null || page.getRecords() == null) {
+            return List.of();
         }
-        // 把图书列表拼成一段人话返回给模型，模型再组织成友好回答
         return page.getRecords().stream()
                 .limit(limit)
-                .map(book -> String.format("《%s》 %s ¥%s",
-                        book.getTitle(), book.getAuthor(), book.getPrice()))
-                .reduce((a, b) -> a + "\n" + b)
-                .orElse("没有找到相关图书");
+                .map(book -> new BookBrief(book.getTitle(), book.getAuthor(), book.getPrice()))
+                .toList();
     }
 
-    /** @Tool 返回全部分类，模型可据此引导用户按分类找书。 */
-    @Tool("查询所有图书分类（返回分类ID与名称）")
-    public String listCategories() {
+    @Tool(description = "查询所有图书分类（返回分类ID与名称）")
+    public List<CategoryBrief> listCategories() {
         List<CategorySnapshot> list = ResultUtils.data(bookFeignClient.listCategories());
-        if (list == null || list.isEmpty()) {
-            return "暂无分类";
+        if (list == null) {
+            return List.of();
         }
         return list.stream()
-                .map(category -> category.getId() + "-" + category.getName())
-                .reduce((a, b) -> a + ", " + b)
-                .orElse("暂无分类");
+                .map(category -> new CategoryBrief(category.getId(), category.getName()))
+                .toList();
+    }
+
+    /** 图书摘要（工具返回值，Spring AI 序列化为 JSON 提供给模型）。 */
+    record BookBrief(String title, String author, BigDecimal price) {
+    }
+
+    /** 分类摘要（工具返回值）。 */
+    record CategoryBrief(Long id, String name) {
     }
 }

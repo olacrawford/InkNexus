@@ -22,6 +22,7 @@ import com.inknexus.order.service.OrderService;
 import com.inknexus.order.vo.OrderDetailVO;
 import com.inknexus.order.vo.OrderVO;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -38,44 +39,40 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
- * 订单业务实现
+ * 订单业务实现：下单主链路（远程预占库存 → 本地落库 → 发关单延迟消息）与订单状态机
+ * （0 待支付 / 1 已支付 / 2 已取消 / 3 已完成）都收敛在本类。
+ *
+ * <p>关键不变量：下单幂等靠 t_order 上“用户ID + clientRequestId”唯一键兜底，冲突时释放预占并返回已有订单；
+ * 价格以 book 服务下单时刻返回为快照；状态迁移一律走 WHERE status 条件更新，防并发重复确认/释放；
+ * 状态迁移后的库存事件在事务内发送、失败即抛异常回滚，避免“状态已改但下游不知道”。
  */
 @Slf4j
 @Service
 public class OrderServiceImpl implements OrderService {
 
-    private final OrderMapper orderMapper;
-    private final OrderItemMapper orderItemMapper;
-    private final BookClient bookClient;
-    private final CartClient cartClient;
-    private final StockClient stockClient;
-    private final OrderEventPublisher orderEventPublisher;
-    private final int orderExpireMinutes;
+    @Autowired
+    private OrderMapper orderMapper;
+    @Autowired
+    private OrderItemMapper orderItemMapper;
+    @Autowired
+    private BookClient bookClient;
+    @Autowired
+    private CartClient cartClient;
+    @Autowired
+    private StockClient stockClient;
+    @Autowired
+    private OrderEventPublisher orderEventPublisher;
 
-    // 构造注入 mapper 和 Feign 客户端
-    public OrderServiceImpl(OrderMapper orderMapper,
-                            OrderItemMapper orderItemMapper,
-                            BookClient bookClient,
-                            CartClient cartClient,
-                            StockClient stockClient,
-                            OrderEventPublisher orderEventPublisher,
-                            @Value("${inknexus.order.expire-minutes:30}") int orderExpireMinutes) {
-        this.orderMapper = orderMapper;
-        this.orderItemMapper = orderItemMapper;
-        this.bookClient = bookClient;
-        this.cartClient = cartClient;
-        this.stockClient = stockClient;
-        this.orderEventPublisher = orderEventPublisher;
-        this.orderExpireMinutes = orderExpireMinutes;
-    }
+    /** 订单超时关单时长（分钟），来自 Nacos 配置 */
+    @Value("${inknexus.order.expire-minutes:30}")
+    private int orderExpireMinutes;
 
     /**
-     * 直接下单：Feign 调图书服务拿价格/标题 → 算总价 → 落订单 + 明细
+     * 直接下单：价格以 book 服务下单时刻返回为快照；图书不存在或价格为空时返回 null（控制器转 400）。
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderDetailVO createOrder(Long userId, OrderCreateRequest request) {
-        // 通过 Feign 调图书服务拿价格与标题（下单即快照，避免后续改价影响历史订单）
         BookSnapshot book = successfulData(bookClient.getBookById(request.getBookId()));
         if (book == null || book.getPrice() == null) {
             return null;
@@ -94,7 +91,8 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 购物车下单：读取购物车已选条目，一次创建订单主表和多条订单明细
+     * 购物车下单：读取购物车已选条目创建多明细订单；校验全部发生在远程预占库存之前，
+     * 失败抛 {@link BusinessException} 且不触碰库存，避免补偿释放。
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -104,7 +102,7 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException(400, "购物车没有选中的商品");
         }
 
-        // 一次批量拉取所有图书（一条 IN 查询），替代逐本 Feign 调用导致下单延迟随商品数线性增长
+        // 一次批量拉取所有图书，避免逐本 Feign 调用使下单延迟随商品数线性增长
         List<Long> bookIds = cartItems.stream().map(CartItemSnapshot::getBookId).toList();
         List<BookSnapshot> fetchedBooks = successfulData(bookClient.listBooksByIds(bookIds));
         if (fetchedBooks == null) {
@@ -113,7 +111,6 @@ public class OrderServiceImpl implements OrderService {
         Map<Long, BookSnapshot> bookMap = fetchedBooks.stream()
                 .collect(Collectors.toMap(BookSnapshot::getId, b -> b));
 
-        // 校验每本书都已拿到价格并计算总价；任一本书不存在/下架时不落库
         List<BookSnapshot> books = new ArrayList<>();
         List<Integer> quantities = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
@@ -128,7 +125,6 @@ public class OrderServiceImpl implements OrderService {
         }
 
         List<StockOperationItem> stockItems = buildStockItems(books, quantities);
-        // 累加过的变量不能被 lambda 引用，取 final 别名
         BigDecimal finalTotalAmount = totalAmount;
         // 一次预占所有商品，库存服务内部会整体回滚
         return placeOrder(userId, request.getClientRequestId(), stockItems, () -> {
@@ -142,10 +138,8 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 下单公共骨架：预占库存 → try 落库+发关单消息 → 幂等命中补偿/异常补偿。
-     * 远程预占发生在本地事务之外、不可回滚，因此落库失败必须显式补偿释放（见两个 catch）。
-     *
-     * @param orderWriter 订单落库动作（主表+明细），返回创建的订单；由各下单入口提供各自的写法
+     * 下单公共骨架：预占库存 → 落库+发关单消息 → 失败补偿。
+     * 远程预占在本地事务之外、不可回滚，落库失败必须显式补偿释放（见两个 catch）。
      */
     private OrderDetailVO placeOrder(Long userId, String clientRequestId,
                                      List<StockOperationItem> stockItems, Supplier<Order> orderWriter) {
@@ -155,7 +149,7 @@ public class OrderServiceImpl implements OrderService {
             publishCloseDelay(order.getId());
             return getOrderDetail(order.getId(), userId);
         } catch (DuplicateKeyException ex) {
-            // 幂等命中：同一用户同一请求号已下过单，补偿释放本次预占并返回已有订单
+            // 幂等命中：释放本次预占，返回已有订单
             return returnExistingOrder(userId, clientRequestId, stockItems, ex);
         } catch (Exception ex) {
             // 本地订单落库异常时补偿释放，避免库存被长期占用
@@ -164,6 +158,9 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    /**
+     * 插入订单主表；clientRequestId 命中唯一键时 insert 抛 DuplicateKeyException，由 placeOrder 走幂等分支。
+     */
     private Order insertOrderHead(Long userId, String clientRequestId, BigDecimal totalAmount,
                                   String receiverName, String receiverPhone, String receiverAddress) {
         // 订单号：OD + 时间戳 + UUID 前6位，保证唯一
@@ -180,8 +177,7 @@ public class OrderServiceImpl implements OrderService {
         order.setReceiverPhone(receiverPhone);
         order.setReceiverAddress(receiverAddress);
         order.setCreateTime(now);
-        // 超时未支付订单由延迟消息自动取消，过期时间按配置向后计算；
-        // 必须按秒截断，否则 MySQL DATETIME 四舍五入进位会让延迟消息比存的过期时间早约 1 秒到达，
+        // 过期时间必须按秒截断：MySQL DATETIME 四舍五入会让延迟消息比存的过期时间早约 1 秒到达，
         // 导致 closeExpiredOrder 的 expire_time <= now 条件误判“未到期”
         order.setExpireTime(now.plusMinutes(orderExpireMinutes).truncatedTo(ChronoUnit.SECONDS));
         order.setUpdateTime(now);
@@ -190,8 +186,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 下单幂等兜底：唯一键冲突说明同一用户已用相同请求号下过单，
-     * 释放本次重复预占的库存后返回已有订单，保证重复提交无副作用。
+     * 下单幂等兜底：释放本次重复预占的库存后返回已有订单，保证重复提交无副作用。
      */
     private OrderDetailVO returnExistingOrder(Long userId, String clientRequestId,
                                               List<StockOperationItem> stockItems,
@@ -209,6 +204,9 @@ public class OrderServiceImpl implements OrderService {
         return getOrderDetail(existing.getId(), userId);
     }
 
+    /**
+     * 插入订单明细：书名/单价取 book 服务下单时刻返回值做快照，之后图书改价不影响本明细。
+     */
     private void insertOrderItem(Order order, BookSnapshot book, Integer quantity) {
         BigDecimal subtotal = book.getPrice().multiply(BigDecimal.valueOf(quantity));
         OrderItem orderItem = new OrderItem();
@@ -223,7 +221,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private List<StockOperationItem> buildStockItems(List<BookSnapshot> books, List<Integer> quantities) {
-        // 把订单明细转换成库存服务需要的入参
         List<StockOperationItem> items = new ArrayList<>();
         for (int i = 0; i < books.size(); i++) {
             items.add(new StockOperationItem(books.get(i).getId(), quantities.get(i)));
@@ -231,8 +228,10 @@ public class OrderServiceImpl implements OrderService {
         return items;
     }
 
+    /**
+     * 远程预占库存；库存不足或远程返回非 200 时抛 BusinessException，下单终止且无需补偿。
+     */
     private void reserveStock(List<StockOperationItem> items) {
-        // 远程预占库存，失败时转为本地业务异常
         StockOperationRequest request = new StockOperationRequest();
         request.setItems(items);
         requireSuccess(stockClient.deduct(request), 400, "库存不足，请稍后重试");
@@ -240,9 +239,10 @@ public class OrderServiceImpl implements OrderService {
 
     private void releaseStockQuietly(List<StockOperationItem> items) {
         try {
+            // 下单补偿时没有可关联的订单，orderId/userId 传 null
             orderEventPublisher.publishStockRelease(null, null, items);
         } catch (Exception ex) {
-            // 补偿释放只记录日志，不掩盖原始的订单异常
+            // 补偿释放只记日志，不掩盖原始的订单异常
             log.warn("订单创建失败后释放库存异常", ex);
         }
     }
@@ -257,25 +257,22 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void requireSuccess(Result<?> result, Integer code, String fallback) {
-        // 远程 Result 非 200 时统一转成业务异常
         if (!isSuccess(result)) {
             String message = result != null && result.getMessage() != null ? result.getMessage() : fallback;
             throw new BusinessException(code, message);
         }
     }
 
-    // 判断远程调用是否成功（code == 200）
     private boolean isSuccess(Result<?> result) {
         return result != null && Integer.valueOf(200).equals(result.getCode());
     }
 
-    // 取出远程调用成功时的 data，失败返回 null
     private <T> T successfulData(Result<T> result) {
         return isSuccess(result) ? result.getData() : null;
     }
 
     /**
-     * 查询某用户的订单列表（按创建时间倒序）
+     * 查询某用户的订单列表。
      */
     @Override
     public List<OrderVO> listOrdersByUserId(Long userId) {
@@ -300,12 +297,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 查询订单详情（只能查自己的订单）
+     * 查询订单详情（只能查自己的订单）；不存在或不属于该用户时返回 null（控制器转 404）。
      */
     @Override
     public OrderDetailVO getOrderDetail(Long id, Long userId) {
         Order order = orderMapper.selectById(id);
-        // 只能查看自己的订单
         if (order == null || !order.getUserId().equals(userId)) {
             return null;
         }
@@ -348,7 +344,6 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean cancelOrder(Long id, Long userId) {
-        // 条件更新保证只有“属于该用户且仍待支付”的订单能被取消，避免和支付/超时任务并发重复释放
         int updated = orderMapper.update(null, new LambdaUpdateWrapper<Order>()
                 .eq(Order::getId, id)
                 .eq(Order::getUserId, userId)
@@ -361,7 +356,6 @@ public class OrderServiceImpl implements OrderService {
 
         List<OrderItem> items = orderItemMapper.selectList(
                 new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, id));
-        // 取消订单时按订单明细释放此前预占的库存
         List<StockOperationItem> stockItems = items.stream()
                 .map(item -> new StockOperationItem(item.getBookId(), item.getQuantity()))
                 .toList();
@@ -373,13 +367,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 标记订单已支付：由 PaySuccessConsumer 消费支付成功消息后调用，
-     * 这是订单进入已支付状态的唯一入口，不对外提供 HTTP 接口。
+     * 标记订单已支付：仅由 PaySuccessConsumer 调用，是订单进入已支付状态的唯一入口，无 HTTP 接口。
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean markPaid(Long id, Long userId) {
-        // 条件更新只允许待支付订单进入已支付，防止取消/超时任务同时更新
         int updated = orderMapper.update(null, new LambdaUpdateWrapper<Order>()
                 .eq(Order::getId, id)
                 .eq(Order::getUserId, userId)
@@ -388,8 +380,7 @@ public class OrderServiceImpl implements OrderService {
                 .set(Order::getUpdateTime, LocalDateTime.now()));
         if (updated == 0) {
             Order existing = orderMapper.selectById(id);
-            // 已支付视为幂等成功，避免支付服务重复回调时误判为失败；
-            // 库存确认事件只在状态 0→1 迁移时发布一次，幂等命中不再重发，
+            // 已支付视为幂等成功，避免支付消息重投被误判失败；库存确认事件只在 0→1 迁移时发一次，
             // 否则重复消息会对同一订单二次确认库存、扣减其他订单的锁定库存
             if (existing != null && existing.getUserId().equals(userId)
                     && existing.getStatus() != null && existing.getStatus() == 1) {
@@ -415,7 +406,6 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean completeOrder(Long id, Long userId) {
-        // 条件更新只允许已支付订单进入已完成，防止取消/超时状态被错误确认
         int updated = orderMapper.update(null, new LambdaUpdateWrapper<Order>()
                 .eq(Order::getId, id)
                 .eq(Order::getUserId, userId)
@@ -459,6 +449,9 @@ public class OrderServiceImpl implements OrderService {
         return true;
     }
 
+    /**
+     * 事务内发布库存确认事件，发送失败即抛异常回滚：宁可支付消息重投，也不让订单已支付而库存悬空。
+     */
     private void publishOrderPaidOrThrow(Long orderId, Long userId, List<StockOperationItem> items) {
         try {
             orderEventPublisher.publishOrderPaid(orderId, userId, items);
@@ -467,6 +460,9 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    /**
+     * 事务内发布库存释放事件，发送失败即抛异常回滚，状态迁移与下游释放同生同灭；超时关单场景 userId 传 null。
+     */
     private void publishStockReleaseOrThrow(Long orderId, Long userId, List<StockOperationItem> items) {
         try {
             orderEventPublisher.publishStockRelease(orderId, userId, items);

@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnClass(RequestInterceptor.class)
 public class TraceIdFeignConfig {
 
+    /** 注册链路透传拦截器；{@code @ConditionalOnMissingBean} 允许业务侧注册同类型 Bean 时不冲突。 */
     @Bean
     @ConditionalOnMissingBean(TraceIdFeignInterceptor.class)
     public TraceIdFeignInterceptor traceIdFeignInterceptor() {

@@ -6,6 +6,11 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * 单本图书的库存操作条目：/stock/deduct 请求体的明细项，
+ * 同时也是订单侧库存确认/释放事件（OrderStockEvent.items）转成服务内部入参的载体。
+ * quantity 为正整数；扣减/释放/确认共用同一结构。
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

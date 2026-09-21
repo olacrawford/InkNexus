@@ -7,6 +7,7 @@ import com.inknexus.stock.service.StockService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -19,14 +20,17 @@ import java.util.List;
 @Component
 public class OrderStockConsumer {
 
-    private final ObjectMapper objectMapper;
-    private final StockService stockService;
+    @Autowired
+    private ObjectMapper objectMapper;
+    @Autowired
+    private StockService stockService;
 
-    public OrderStockConsumer(ObjectMapper objectMapper, StockService stockService) {
-        this.objectMapper = objectMapper;
-        this.stockService = stockService;
-    }
-
+    /**
+     * 消费订单支付确认（ORDER_PAID → confirm）与库存释放（ORDER_RELEASE → release）事件。
+     * 明细转成服务内条目后交给 StockService；监听重试耗尽的消息经死信参数进入 DLX 等待人工处理。
+     *
+     * @param payload JSON 序列化的 OrderStockEvent
+     */
     @RabbitListener(queues = {InkNexusRabbitMq.ORDER_PAID_QUEUE, InkNexusRabbitMq.ORDER_STOCK_RELEASE_QUEUE})
     public void onOrderStockEvent(String payload) {
         OrderStockEvent event;
@@ -41,6 +45,7 @@ public class OrderStockConsumer {
             log.warn("订单库存事件缺少需要确认或释放的商品明细：{}", payload);
             return;
         }
+        // 确认事件必须带订单号（订单服务按订单判断是否已支付过）；释放事件无此要求
         if (OrderStockEvent.OPERATION_ORDER_PAID.equals(event.getOperation())
                 && event.getOrderId() == null) {
             log.warn("订单支付库存确认事件缺少订单号：{}", payload);

@@ -49,9 +49,9 @@
 
 当前使用的版本：
 
-- Spring Boot `3.2.5`
-- Spring Cloud `2023.0.2`
-- Spring Cloud Alibaba `2023.0.1.0`
+- Spring Boot `3.5.16`
+- Spring Cloud `2025.0.3`
+- Spring Cloud Alibaba `2025.0.0.0`
 
 ## 4. inknexus-common 模块说明
 

@@ -8,6 +8,7 @@ import com.inknexus.auth.mapper.UserAddressMapper;
 import com.inknexus.auth.service.AddressService;
 import com.inknexus.auth.vo.AddressVO;
 import com.inknexus.common.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,21 +17,18 @@ import java.util.List;
 /**
  * 用户收货地址业务实现
  * 业务规则：一个用户最多1条默认地址；新增/修改/删除维护默认地址；校验地址归属防止越权
+ * <p>"只能操作自己的地址"由两层保证：userId 取自网关注入的 {@code X-User-Id} 头（不信任客户端），
+ * 且 {@link #getOwnedAddress} 的查询条件同时匹配 id 与 user_id，非本人地址查不到、按 404 处理。
+ * <p>默认地址的唯一性靠"先清空再置位/补位"的多步写保证，这些写操作都在同一事务内完成。
  */
 @Service
 public class AddressServiceImpl implements AddressService {
 
-    private final UserAddressMapper addressMapper;
-
-    //构造器注入mapper
-    public AddressServiceImpl(UserAddressMapper addressMapper) {
-        this.addressMapper = addressMapper;
-    }
+    @Autowired
+    private UserAddressMapper addressMapper;
 
     /**
      * 查询用户全部地址，默认地址优先，其次按更新时间倒序
-     * @param userId 用户id
-     * @return 地址VO集合
      */
     @Override
     public List<AddressVO> list(Long userId) {
@@ -42,20 +40,14 @@ public class AddressServiceImpl implements AddressService {
     }
 
     /**
-     * 新增收货地址
-     * 第一条地址自动为默认；设为默认时清空用户其他地址默认标记
-     * @param userId 用户id
-     * @param request 前端地址入参
-     * @return 新增后的地址VO
+     * 新增收货地址；第一条地址自动为默认，设为默认时清空用户其他地址的默认标记
      */
     @Override
     @Transactional
     public AddressVO create(Long userId, AddressRequest request) {
-        //统计用户已有地址数量
         long count = addressMapper.selectCount(new LambdaQueryWrapper<UserAddress>()
                 .eq(UserAddress::getUserId, userId));
 
-        //第一条地址 || 前端指定默认 → 当前为默认地址
         boolean defaultAddress = Boolean.TRUE.equals(request.getIsDefault()) || count == 0;
         if (defaultAddress) {
             clearDefault(userId);
@@ -63,34 +55,27 @@ public class AddressServiceImpl implements AddressService {
 
         UserAddress address = new UserAddress();
         address.setUserId(userId);
-        fillRequest(address, request);//复制前端请求数据到实体
+        fillRequest(address, request);
         address.setIsDefault(defaultAddress ? 1 : 0);
         addressMapper.insert(address);
         return toVO(address);
     }
 
     /**
-     * 修改地址
-     * 取消原默认地址时兜底保证至少存在一条默认地址
-     * @param userId 用户id
-     * @param addressId 地址id
-     * @param request 修改入参
-     * @return 修改后地址VO
+     * 修改地址；取消原默认地址时兜底保证至少存在一条默认地址；isDefault=null 时不触碰默认标记
+     * @throws BusinessException 404 地址不存在或不属于当前用户
      */
     @Override
     @Transactional
     public AddressVO update(Long userId, Long addressId, AddressRequest request) {
-        //校验地址属于当前用户
         UserAddress address = getOwnedAddress(userId, addressId);
         Integer oldDefault = address.getIsDefault();//保存修改前默认状态
 
         fillRequest(address, request);
-        //设置为默认：清空其他默认
         if (Boolean.TRUE.equals(request.getIsDefault())) {
             clearDefault(userId);
             address.setIsDefault(1);
         }
-        //取消默认，如果原本是默认，需要兜底生成新默认
         else if (Boolean.FALSE.equals(request.getIsDefault())) {
             address.setIsDefault(0);
             if (oldDefault != null && oldDefault == 1) {
@@ -103,27 +88,23 @@ public class AddressServiceImpl implements AddressService {
     }
 
     /**
-     * 设置某条地址为默认地址
-     * @param userId 用户id
-     * @param addressId 地址id
+     * 设置某条地址为默认地址；先清空该用户全部默认标记再置位
      */
     @Override
     @Transactional
     public void setDefault(Long userId, Long addressId) {
-        getOwnedAddress(userId, addressId);//归属校验
-        clearDefault(userId);//清空全部默认
+        getOwnedAddress(userId, addressId);
+        clearDefault(userId);
 
         UserAddress address = new UserAddress();
         address.setId(addressId);
         address.setIsDefault(1);
+        //只设置 id 与 isDefault，MyBatis-Plus updateById 跳过 null 字段，其余列不会被覆盖
         addressMapper.updateById(address);
     }
 
     /**
-     * 删除地址
-     * 如果删除的是默认地址，自动选一条作为新默认
-     * @param userId 用户id
-     * @param addressId 地址id
+     * 删除地址；如果删除的是默认地址，自动选一条作为新默认
      */
     @Override
     @Transactional
@@ -131,7 +112,7 @@ public class AddressServiceImpl implements AddressService {
         UserAddress address = getOwnedAddress(userId, addressId);
         addressMapper.deleteById(addressId);
 
-        //删除的是默认地址，自动指定下一条为默认
+        //先删后补：若补位失败整个事务回滚，不会出现"无默认地址"的中间状态对外可见
         if (address.getIsDefault() != null && address.getIsDefault() == 1) {
             UserAddress next = addressMapper.selectOne(new LambdaQueryWrapper<UserAddress>()
                     .eq(UserAddress::getUserId, userId)
@@ -145,10 +126,8 @@ public class AddressServiceImpl implements AddressService {
     }
 
     /**
-     * 校验地址归属：防止越权操作别人地址
-     * @param userId 当前用户
-     * @param addressId 地址id
-     * @return 地址实体
+     * 归属校验：查询条件同时匹配 id 与 userId，非本人地址统一按"不存在"处理，避免泄露他人地址的存在性
+     * @throws BusinessException 404 地址不存在或不属于当前用户
      */
     private UserAddress getOwnedAddress(Long userId, Long addressId) {
         UserAddress address = addressMapper.selectOne(new LambdaQueryWrapper<UserAddress>()
@@ -160,10 +139,6 @@ public class AddressServiceImpl implements AddressService {
         return address;
     }
 
-    /**
-     * 清空该用户所有地址的默认标记 is_default=0
-     * @param userId 用户id
-     */
     private void clearDefault(Long userId) {
         addressMapper.update(null, new LambdaUpdateWrapper<UserAddress>()
                 .eq(UserAddress::getUserId, userId)
@@ -172,18 +147,15 @@ public class AddressServiceImpl implements AddressService {
 
     /**
      * 兜底：保证用户至少有一条默认地址（排除指定地址）
-     * @param userId 用户id
-     * @param excludeAddressId 需要排除的地址id
      */
     private void ensureOneDefaultRemains(Long userId, Long excludeAddressId) {
         long defaultCount = addressMapper.selectCount(new LambdaQueryWrapper<UserAddress>()
                 .eq(UserAddress::getUserId, userId)
                 .eq(UserAddress::getIsDefault, 1));
         if (defaultCount > 0) {
-            return;//已有默认直接返回
+            return;
         }
 
-        //选除当前外第一条地址设为默认
         UserAddress next = addressMapper.selectOne(new LambdaQueryWrapper<UserAddress>()
                 .eq(UserAddress::getUserId, userId)
                 .ne(UserAddress::getId, excludeAddressId)
@@ -195,11 +167,6 @@ public class AddressServiceImpl implements AddressService {
         }
     }
 
-    /**
-     * 请求DTO → 数据库实体，拷贝地址字段
-     * @param address 实体
-     * @param request 入参DTO
-     */
     private void fillRequest(UserAddress address, AddressRequest request) {
         address.setReceiverName(request.getReceiverName());
         address.setReceiverPhone(request.getReceiverPhone());
@@ -209,11 +176,6 @@ public class AddressServiceImpl implements AddressService {
         address.setDetailAddress(request.getDetailAddress());
     }
 
-    /**
-     * 数据库实体 → 返回前端VO
-     * @param address 数据库实体
-     * @return 前端VO
-     */
     private AddressVO toVO(UserAddress address) {
         AddressVO vo = new AddressVO();
         vo.setId(address.getId());

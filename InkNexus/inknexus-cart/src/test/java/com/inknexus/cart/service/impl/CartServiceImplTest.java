@@ -8,10 +8,10 @@ import com.inknexus.cart.mapper.CartItemMapper;
 import com.inknexus.cart.vo.CartItemVO;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,6 +23,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@code CartServiceImpl} 加购链路纯单元测试：mock 掉 mapper 与 BookClient，
+ * 覆盖"图书可购才 upsert、不可购不写库"的跨服务校验时序。
+ */
 @ExtendWith(MockitoExtension.class)
 class CartServiceImplTest {
 
@@ -31,12 +35,8 @@ class CartServiceImplTest {
     @Mock
     private BookClient bookClient;
 
+    @InjectMocks
     private CartServiceImpl cartService;
-
-    @BeforeEach
-    void setUp() {
-        cartService = new CartServiceImpl(cartItemMapper, bookClient);
-    }
 
     @Test
     void add_upsertsAndReturnsQuantity_whenBookExists() {

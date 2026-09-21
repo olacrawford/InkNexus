@@ -6,6 +6,7 @@ import com.inknexus.order.service.OrderService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -16,14 +17,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class OrderCloseDelayConsumer {
 
-    private final ObjectMapper objectMapper;
-    private final OrderService orderService;
+    @Autowired
+    private ObjectMapper objectMapper;
+    @Autowired
+    private OrderService orderService;
 
-    public OrderCloseDelayConsumer(ObjectMapper objectMapper, OrderService orderService) {
-        this.objectMapper = objectMapper;
-        this.orderService = orderService;
-    }
-
+    /**
+     * 消费到期关单消息；返回 false（已支付/已取消/未到期）只记日志不重试——条件更新天然幂等，
+     * 抛错路径交由监听器重试，耗尽后进死信队列。
+     */
     @RabbitListener(queues = InkNexusRabbitMq.ORDER_CLOSE_QUEUE)
     public void onOrderCloseDue(String payload) {
         OrderCloseDelayMessage event;

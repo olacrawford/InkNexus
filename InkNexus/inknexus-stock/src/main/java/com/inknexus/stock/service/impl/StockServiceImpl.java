@@ -9,6 +9,7 @@ import com.inknexus.stock.mapper.StockMapper;
 import com.inknexus.stock.service.StockService;
 import com.inknexus.stock.vo.StockVO;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,17 +24,18 @@ import java.util.List;
 @Service
 public class StockServiceImpl implements StockService {
 
-    private final StockMapper stockMapper;
-    private final MqConsumedLogMapper mqConsumedLogMapper;
+    @Autowired
+    private StockMapper stockMapper;
+    @Autowired
+    private MqConsumedLogMapper mqConsumedLogMapper;
 
-    public StockServiceImpl(StockMapper stockMapper, MqConsumedLogMapper mqConsumedLogMapper) {
-        this.stockMapper = stockMapper;
-        this.mqConsumedLogMapper = mqConsumedLogMapper;
-    }
-
+    /**
+     * 查询库存账目。
+     *
+     * @throws com.inknexus.common.exception.BusinessException 404 库存记录不存在
+     */
     @Override
     public StockVO getByBookId(Long bookId) {
-        // 只查询当前图书一条库存记录，不存在直接返回 404
         BookStock row = stockMapper.selectOne(new LambdaQueryWrapper<BookStock>()
                 .eq(BookStock::getBookId, bookId));
         if (row == null) {
@@ -42,6 +44,10 @@ public class StockServiceImpl implements StockService {
         return toVO(row);
     }
 
+    /**
+     * 批量预占库存（下单路径）：逐本条件更新，任一本不足即整体回滚，与订单创建构成跨服务同步流程。
+     * @throws com.inknexus.common.exception.BusinessException 400 任一图书库存不足
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deduct(List<StockOperationItem> items) {
@@ -54,6 +60,12 @@ public class StockServiceImpl implements StockService {
         }
     }
 
+    /**
+     * 释放预占库存（消费订单取消/超时事件），幂等以 eventId 去重。
+     * 策略宽松：单本 affected==0 只记日志不抛错——释放属于补偿动作，
+     * 库存可能早已释放（历史订单、重复补偿），报错只会让补偿流程卡死。
+     * @return true=已执行；false=重复消息被跳过
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean release(String messageId, List<StockOperationItem> items) {
@@ -71,6 +83,13 @@ public class StockServiceImpl implements StockService {
         return true;
     }
 
+    /**
+     * 确认库存（消费订单支付成功事件），幂等以 eventId 去重。
+     * 策略严格：锁定库存不足且未确认过时抛出 500，让监听器重试/最终进死信，
+     * 因为确认失败意味着账目不平，静默吞掉会造成超卖。
+     * @return true=已执行；false=重复消息被跳过
+     * @throws com.inknexus.common.exception.BusinessException 500 确认失败且非重复确认
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean confirm(String messageId, List<StockOperationItem> items) {

@@ -12,6 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+/**
+ * {@link TraceIdFilter} 生成/复用链路编号、回写响应头与 MDC 清理的单元测试。
+ */
 class TraceIdFilterTest {
 
     private final TraceIdFilter filter = new TraceIdFilter();

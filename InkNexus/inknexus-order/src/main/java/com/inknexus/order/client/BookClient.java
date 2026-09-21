@@ -9,13 +9,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
+/**
+ * 图书服务 Feign 客户端：下单时获取书目与价格，是订单价格快照的数据来源。
+ */
 @FeignClient(name = "book")
 public interface BookClient {
 
     @GetMapping("/books/{id}")
     Result<BookSnapshot> getBookById(@PathVariable("id") Long bookId);
 
-    // 批量查书：购物车下单一次拉齐所有图书，替代循环单查
     @GetMapping("/books/by-ids")
     Result<List<BookSnapshot>> listBooksByIds(@RequestParam("ids") List<Long> bookIds);
 }

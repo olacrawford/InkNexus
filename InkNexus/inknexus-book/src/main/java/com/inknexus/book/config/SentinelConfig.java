@@ -10,20 +10,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Sentinel限流规则配置类
- * 代码方式定义限流规则，针对listBooks资源做QPS限流；
- * 也可以不在代码写，直接在Sentinel控制台网页配置规则
+ * Sentinel 限流规则配置：资源名与 Service 层 {@code @SentinelResource(value = "...")} 一一对应，
+ * QPS 超阈值时请求改走注解声明的 blockHandler 抛 BusinessException(429)；
+ * 保护四个高频读接口（列表/分页/详情/分类），即读多写少场景下最易打垮 DB 的路径。
  */
-@Configuration // 标识为Spring配置类，项目启动会加载该类
+@Configuration
 public class SentinelConfig {
 
-    /**
-     * @PostConstruct：对象创建完成、依赖注入完毕之后，自动执行这个initFlowRules初始化方法
-     * 作用：项目启动成功后立刻加载Sentinel限流规则
-     */
     @PostConstruct
     public void initFlowRules() {
-        // 存放多条限流规则的集合，可以配置多个资源的限流
         List<FlowRule> rules = new ArrayList<>();
 
         // 按查询接口拆分规则，正常访问不会误伤，压测时才触发限流
@@ -32,10 +27,12 @@ public class SentinelConfig {
         rules.add(createFlowRule("getBookById", 120));
         rules.add(createFlowRule("listCategories", 80));
 
-        // 将规则加载到Sentinel管理器，规则正式生效
         FlowRuleManager.loadRules(rules);
     }
 
+    /**
+     * 组装单条 QPS 流控规则：统计窗口内每秒请求数超过 count 即拒绝（默认「直接拒绝」策略，快速失败）
+     */
     private FlowRule createFlowRule(String resource, int count) {
         FlowRule rule = new FlowRule();
         rule.setResource(resource);

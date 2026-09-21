@@ -12,6 +12,7 @@ import com.inknexus.payment.mapper.PaymentMapper;
 import com.inknexus.payment.mq.PaySuccessPublisher;
 import com.inknexus.payment.service.PaymentService;
 import com.inknexus.payment.vo.PaymentVO;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,21 +21,29 @@ import java.util.UUID;
 
 /**
  * 支付业务：当前使用内部模拟支付，先落支付单，再发布支付成功事件由订单服务异步更新订单。
+ * 关键不变量：
+ * 金额与订单状态以 order 服务返回为准，绝不信任前端；
+ * 支付单幂等（已存在且已支付直接返回），PaySuccess 只在首次支付时发布一次；
+ * PaySuccess 在支付事务内发布，发送失败回滚支付单，避免“已支付但订单未更新”。
  */
 @Service
 public class PaymentServiceImpl implements PaymentService {
 
-    private final PaymentMapper paymentMapper;
-    private final OrderClient orderClient;
-    private final PaySuccessPublisher paySuccessPublisher;
+    @Autowired
+    private PaymentMapper paymentMapper;
+    @Autowired
+    private OrderClient orderClient;
+    @Autowired
+    private PaySuccessPublisher paySuccessPublisher;
 
-    public PaymentServiceImpl(PaymentMapper paymentMapper, OrderClient orderClient,
-                              PaySuccessPublisher paySuccessPublisher) {
-        this.paymentMapper = paymentMapper;
-        this.orderClient = orderClient;
-        this.paySuccessPublisher = paySuccessPublisher;
-    }
-
+    /**
+     * 发起（模拟）支付。整个方法在一个事务内：远程校验订单 → 查/建支付单 → 发布 PaySuccess。
+     * 幂等语义：已存在已支付支付单时直接返回既有记录，PaySuccess 不重发——
+     * 否则订单服务会对同一订单二次确认库存。发送失败抛 500，事务回滚支付单。
+     *
+     * @throws com.inknexus.common.exception.BusinessException 404 订单不存在；403 非本人订单；
+     *                                                         400 订单不可支付或已超时；500 事件发布失败
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public PaymentVO pay(Long userId, PaymentRequest request) {
@@ -74,6 +83,12 @@ public class PaymentServiceImpl implements PaymentService {
         return toVO(payment);
     }
 
+    /**
+     * 支付前校验订单：归属、状态、时效三道关口，全部通过才返回订单快照。
+     * 这是支付服务的信任边界——金额、状态都以这次远程调用的结果为准。
+     *
+     * @throws com.inknexus.common.exception.BusinessException 404 订单不存在；403 非本人订单；400 不可支付
+     */
     private OrderSnapshot getPayableOrder(Long userId, Long orderId) {
         // 远程调用订单服务，避免支付服务直接信任前端传入的订单信息
         Result<OrderSnapshot> result = orderClient.getOrderDetail(orderId, userId);
@@ -84,6 +99,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (!order.getUserId().equals(userId)) {
             throw new BusinessException(403, "无权限支付该订单");
         }
+        // 状态 2=已取消 3=已完成，均已是终态，拒绝支付
         if (order.getStatus() != null && (order.getStatus() == 2 || order.getStatus() == 3)) {
             throw new BusinessException(400, "订单当前状态不可支付");
         }
@@ -101,8 +117,11 @@ public class PaymentServiceImpl implements PaymentService {
                 .eq(Payment::getUserId, userId));
     }
 
+    /**
+     * 新建支付单。模拟支付不接真实渠道，落单即标记已支付（status=1）并记录支付时间；
+     * 金额取订单快照总额。payment_no 由时间戳 + 随机串拼出，满足唯一键要求。
+     */
     private Payment createPayment(OrderSnapshot order, Long userId) {
-        // 当前为内部模拟支付，落单后直接标记为已支付
         String paymentNo = "PAY" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 6);
         LocalDateTime now = LocalDateTime.now();
 
@@ -121,6 +140,11 @@ public class PaymentServiceImpl implements PaymentService {
         return payment;
     }
 
+    /**
+     * 发布 PaySuccess 事件（仅在支付单首次到达已支付状态的路径上调用）。
+     * 发送失败转成业务异常向上抛，由外层事务回滚支付单，保证“支付单已支付”
+     * 与“事件已投递”尽量同步；投递后的丢失由 publisher confirm 日志与消费侧幂等兜底。
+     */
     private void publishPaySuccess(OrderSnapshot order, Payment payment) {
         try {
             PaySuccessMessage message = new PaySuccessMessage();

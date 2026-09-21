@@ -6,6 +6,7 @@ import com.inknexus.cart.service.CartService;
 import com.inknexus.cart.vo.CartItemVO;
 import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,61 +19,75 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 购物车接口（/cart，需登录）。
+ * <p>所有接口的 userId 都取自 {@code X-User-Id} 头（网关校验 JWT 后注入、覆盖客户端同名头），
+ * 数据按用户天然隔离；条目级操作由 Service 层再做一次归属校验。
+ */
 @RestController
 @RequestMapping("/cart")
 public class CartController {
 
-    // 购物车接口只操作当前登录用户自己的数据
-    private final CartService cartService;
-
-    public CartController(CartService cartService) {
-
-        this.cartService = cartService;
-    }
+    @Autowired
+    private CartService cartService;
 
     @GetMapping("/hello")
-    // 健康检查，Gateway 将 /hello 结尾的路径视为公开接口
+    // 网关将 /hello 结尾的路径视为公开接口，无需 JWT
     public Result<String> hello() {
         return Result.success("inknexus-cart is running");
     }
 
+    /**
+     * 查询当前用户全部购物车条目，最近更新的在前
+     */
     @GetMapping
-    // userId 由网关校验 JWT 后写入 X-User-Id，这里不接收前端传入的 userId
     public Result<List<CartItemVO>> list(@RequestHeader("X-User-Id") Long userId) {
         return Result.success(cartService.list(userId));
     }
 
+    /**
+     * 查询当前用户已勾选条目；订单服务通过 Feign 调用此接口取结算商品
+     */
     @GetMapping("/selected")
-    // 订单服务通过 Feign 调用此接口获取购物车中已勾选的商品
     public Result<List<CartItemVO>> selected(@RequestHeader("X-User-Id") Long userId) {
         return Result.success(cartService.selected(userId));
     }
 
+    /**
+     * 加购；先经图书服务校验图书可购再写入，重复加购同一本书时合并数量而不是新增多行
+     * @throws com.inknexus.common.exception.BusinessException 400 图书不存在或已下架
+     */
     @PostMapping
-    // 同一用户同一本书重复加购时，由业务层合并数量而不是新增多行
     public Result<CartItemVO> add(@RequestHeader("X-User-Id") Long userId,
                                   @Valid @RequestBody CartItemCreateRequest request) {
         return Result.success(cartService.add(userId, request));
     }
 
+    /**
+     * 修改数量/勾选状态；数量为覆盖式赋值而非累加，selected=null 保持原勾选状态，非本人条目按不存在处理
+     * @throws com.inknexus.common.exception.BusinessException 404 条目不存在或不属于当前用户
+     */
     @PutMapping("/{id}")
-    // 只能修改当前用户购物车中的条目
     public Result<CartItemVO> update(@RequestHeader("X-User-Id") Long userId,
                                      @PathVariable Long id,
                                      @Valid @RequestBody CartItemUpdateRequest request) {
         return Result.success(cartService.update(userId, id, request));
     }
 
+    /**
+     * 删除单条购物车条目；非本人条目按不存在处理
+     */
     @DeleteMapping("/{id}")
-    // 只能删除当前用户自己的购物车条目，防止越权删除
     public Result<Void> delete(@RequestHeader("X-User-Id") Long userId,
                                @PathVariable Long id) {
         cartService.delete(userId, id);
         return Result.success();
     }
 
+    /**
+     * 清空当前用户购物车
+     */
     @DeleteMapping
-    // 清空操作同样按当前用户隔离
     public Result<Void> clear(@RequestHeader("X-User-Id") Long userId) {
         cartService.clear(userId);
         return Result.success();

@@ -22,6 +22,7 @@ public class OrderTimeoutTask {
 
     private final OrderMapper orderMapper;
     private final OrderService orderService;
+    /** 每轮扫描最多处理的订单数，防止过期订单大量积压时一次拉取全表 */
     private final int batchSize;
 
     public OrderTimeoutTask(OrderMapper orderMapper,
@@ -32,6 +33,11 @@ public class OrderTimeoutTask {
         this.batchSize = batchSize;
     }
 
+    /**
+     * 按配置 cron 周期扫描已过期仍待支付的订单，逐单调 closeExpiredOrder 关单并释放库存。
+     * closeExpiredOrder 是条件更新，与延迟消息消费并发执行也只会有一方关单成功；
+     * 单笔失败只记日志，下一轮扫描自然重试。
+     */
     @Scheduled(cron = "${inknexus.order.close-cron:0 */2 * * * ?}")
     public void closeExpiredOrders() {
         List<Order> orders = orderMapper.selectList(new LambdaQueryWrapper<Order>()

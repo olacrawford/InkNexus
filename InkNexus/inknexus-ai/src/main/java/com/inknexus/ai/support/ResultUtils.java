@@ -4,20 +4,16 @@ import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
 
-/** Result 解包工具：服务间接口统一返回 Result<T>，本类负责取出真正的业务数据 data。 */
+/**
+ * Result 解包工具：服务间接口统一返回 Result<T>，本类负责取出真正的业务数据 data。
+ * 供 @Tool 工具层使用——模型只认得业务数据本身，包装头需在这里剥掉（约定 code==200 即成功）。
+ */
 public class ResultUtils {
 
     private ResultUtils() {
-        // 工具类不允许实例化，私有构造器即可
     }
 
-    /**
-     * 解包 Result 并取出业务数据。
-     *
-     * @param result 下游服务返回的包装结果
-     * @return 真正的业务数据 T
-     * @throws BusinessException 当下游调用失败（结果为空或 code 非 200）时抛出
-     */
+    /** 解包 Result 取业务数据；结果为空或 code 非 200 时抛 BusinessException。 */
     public static <T> T data(Result<T> result) {
         if (result == null || result.getCode() == null) {
             // 连 Result 都没有，说明下游调用异常，视为系统错误

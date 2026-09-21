@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -15,6 +16,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * OrderCloseDelayConsumer 纯单元测试：覆盖正常关单、缺订单ID跳过、毒消息丢弃三个分支。
+ */
 @ExtendWith(MockitoExtension.class)
 class OrderCloseDelayConsumerTest {
 
@@ -26,7 +30,10 @@ class OrderCloseDelayConsumerTest {
 
     @BeforeEach
     void setUp() {
-        consumer = new OrderCloseDelayConsumer(objectMapper, orderService);
+        // 字段注入后由测试自行装配依赖
+        consumer = new OrderCloseDelayConsumer();
+        ReflectionTestUtils.setField(consumer, "objectMapper", objectMapper);
+        ReflectionTestUtils.setField(consumer, "orderService", orderService);
     }
 
     @Test

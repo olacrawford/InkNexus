@@ -4,8 +4,12 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 
+/**
+ * 图书详情 VO：GET /books/{id} 的返回载荷，也是 {@code BookDetailCache}
+ * 详情缓存中序列化存储的对象（JSON 串），字段变更会影响缓存兼容性。
+ * 保留无参构造器以满足 JSON 反序列化需要。
+ */
 @Data
-//查询图书详细信息
 public class BookDetailVO {
 
     private Long id;

@@ -14,10 +14,10 @@ import com.inknexus.payment.mapper.PaymentMapper;
 import com.inknexus.payment.mq.PaySuccessPublisher;
 import com.inknexus.payment.vo.PaymentVO;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -31,6 +31,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * PaymentServiceImpl 单元测试：覆盖正常支付落单、重复支付只发一次
+ * PaySuccess 事件的不变量、以及事件发布失败抛业务异常。
+ */
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceImplTest {
 
@@ -41,6 +45,7 @@ class PaymentServiceImplTest {
     @Mock
     private PaySuccessPublisher paySuccessPublisher;
 
+    @InjectMocks
     private PaymentServiceImpl paymentService;
 
     @BeforeAll
@@ -48,11 +53,6 @@ class PaymentServiceImplTest {
         MybatisConfiguration configuration = new MybatisConfiguration();
         MapperBuilderAssistant assistant = new MapperBuilderAssistant(configuration, "");
         TableInfoHelper.initTableInfo(assistant, Payment.class);
-    }
-
-    @BeforeEach
-    void setUp() {
-        paymentService = new PaymentServiceImpl(paymentMapper, orderClient, paySuccessPublisher);
     }
 
     @Test

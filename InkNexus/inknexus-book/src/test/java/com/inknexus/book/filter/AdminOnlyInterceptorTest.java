@@ -9,6 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * AdminOnlyInterceptor 角色拦截规则的单测：GET 放行，非 GET 仅 ADMIN 角色放行，其余返回 403。
+ */
 class AdminOnlyInterceptorTest {
 
     private AdminOnlyInterceptor interceptor;

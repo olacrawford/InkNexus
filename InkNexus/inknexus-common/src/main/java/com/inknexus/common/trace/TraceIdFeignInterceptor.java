@@ -13,6 +13,10 @@ import org.slf4j.MDC;
  */
 public class TraceIdFeignInterceptor implements RequestInterceptor {
 
+    /**
+     * MDC 里有链路编号就写入下游请求头；没有则不加头（如下游直连场景、非 HTTP 入口触发的调用），
+     * 下游 TraceIdFilter 会自行生成新编号。
+     */
     @Override
     public void apply(RequestTemplate template) {
         String traceId = MDC.get(TraceIdFilter.MDC_TRACE_ID);

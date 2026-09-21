@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: ai-assistant
+  # 流式对话（Flux SSE）的最长响应时间，需大于模型最大回复耗时
+  mvc:
+    async:
+      request-timeout: 120s
   config:
     import:
       - optional:nacos:ai-assistant.yaml

@@ -4,17 +4,20 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-/** 请求拦截器：在请求进/出时，把网关注入的 X-User-Id 写入并清空用户上下文。 */
+/**
+ * 请求拦截器：在请求进/出时，把网关注入的 X-User-Id 写入并清空用户上下文。
+ * <p>本服务不校验 JWT（由网关统一负责），只信任网关写下的 X-User-Id；
+ * 后续 Feign 调用查订单都基于这里恢复的用户身份，是防止模型跨用户查单的第一环。
+ */
 public class UserContextInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        // 网关鉴权通过后会自动在请求头注入 X-User-Id，里面对应当前登录用户 ID
         String uid = request.getHeader("X-User-Id");
         if (uid != null) {
             UserContextHolder.setUserId(Long.valueOf(uid));
         }
-        return true; // 返回 true 放行，继续走后续流程
+        return true;
     }
 
     @Override

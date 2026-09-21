@@ -2,6 +2,9 @@ package com.inknexus.book.vo;
 
 import lombok.Data;
 
+/**
+ * 分类 VO：GET /books/categories 的返回载荷（id + 名称 + 排序值）。
+ */
 @Data
 public class CategoryVO {
 
