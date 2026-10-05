@@ -1,7 +1,7 @@
 # Local infrastructure for macOS (Apple Silicon) + Docker Desktop.
 # Uses arm64-compatible images and named volumes so data survives restarts.
 # Ports and accounts match nacos-config/*.yaml:
-#   MySQL root / 123456, RabbitMQ admin / 123456.
+#   MySQL root / 123456, RabbitMQ admin / 123456, Seata console seata / seata.
 name: inknexus-infra
 
 services:
@@ -79,6 +79,17 @@ services:
       timeout: 5s
       retries: 20
       start_period: 30s
+
+  # Seata 事务协调器（TC）：下单链路 AT 模式的全局事务由它协调，客户端直连 8091，
+  # 控制台 http://localhost:7091（seata/seata）。file 存储模式零配置，适合本地演示；
+  # 生产应切 db 模式并部署集群。版本与 SCA 2025.0.0.0 BOM 管理的客户端 2.5.0 对齐。
+  seata:
+    image: apache/seata-server:2.5.0
+    container_name: seata
+    restart: unless-stopped
+    ports:
+      - "8091:8091"
+      - "7091:7091"
 
 volumes:
   mysql-data:

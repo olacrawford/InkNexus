@@ -25,6 +25,22 @@ spring:
           multiplier: 2.0
           max-interval: 10000
 
+# Seata 客户端：deduct 由订单服务携带全局事务 XID 调用，自动注册为分支事务；
+# 事务分组名必须与 order 侧一致
+seata:
+  enabled: true
+  application-id: ${spring.application.name}
+  tx-service-group: inknexus_tx_group
+  service:
+    vgroup-mapping:
+      inknexus_tx_group: default
+    grouplist:
+      default: localhost:8091
+  registry:
+    type: file
+  config:
+    type: file
+
 # 日志带 TraceId：common 的 TraceIdFilter 把网关注入的 X-Trace-Id 写入 MDC，跨服务日志可串联
 logging:
   pattern:

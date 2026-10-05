@@ -6,11 +6,9 @@ import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
 import com.inknexus.order.client.BookClient;
 import com.inknexus.order.client.CartClient;
-import com.inknexus.order.client.StockClient;
 import com.inknexus.order.client.dto.BookSnapshot;
 import com.inknexus.order.client.dto.CartItemSnapshot;
 import com.inknexus.order.client.dto.StockOperationItem;
-import com.inknexus.order.client.dto.StockOperationRequest;
 import com.inknexus.order.dto.OrderCreateRequest;
 import com.inknexus.order.dto.OrderFromCartRequest;
 import com.inknexus.order.entity.Order;
@@ -18,6 +16,7 @@ import com.inknexus.order.entity.OrderItem;
 import com.inknexus.order.mapper.OrderItemMapper;
 import com.inknexus.order.mapper.OrderMapper;
 import com.inknexus.order.mq.OrderEventPublisher;
+import com.inknexus.order.service.OrderPlaceTxService;
 import com.inknexus.order.service.OrderService;
 import com.inknexus.order.vo.OrderDetailVO;
 import com.inknexus.order.vo.OrderVO;
@@ -35,16 +34,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
- * 订单业务实现：下单主链路（远程预占库存 → 本地落库 → 发关单延迟消息）与订单状态机
- * （0 待支付 / 1 已支付 / 2 已取消 / 3 已完成）都收敛在本类。
+ * 订单业务实现：下单编排与订单状态机（0 待支付 / 1 已支付 / 2 已取消 / 3 已完成）。
+ * 下单的"预占库存 + 落库"骨架收敛在 {@link OrderPlaceTxService} 的 Seata 全局事务内。
  *
- * <p>关键不变量：下单幂等靠 t_order 上“用户ID + clientRequestId”唯一键兜底，冲突时释放预占并返回已有订单；
+ * <p>关键不变量：下单幂等靠 t_order 上"用户ID + clientRequestId"唯一键，预检前移到预占库存之前，
+ * 并发竞态残余由插入冲突触发全局事务回滚（Seata 基于 undo_log 自动还原预占）后返回已有订单兜底；
  * 价格以 book 服务下单时刻返回为快照；状态迁移一律走 WHERE status 条件更新，防并发重复确认/释放；
- * 状态迁移后的库存事件在事务内发送、失败即抛异常回滚，避免“状态已改但下游不知道”。
+ * 状态迁移后的库存事件在事务内发送、失败即抛异常回滚，避免"状态已改但下游不知道"。
  */
 @Slf4j
 @Service
@@ -59,7 +58,7 @@ public class OrderServiceImpl implements OrderService {
     @Autowired
     private CartClient cartClient;
     @Autowired
-    private StockClient stockClient;
+    private OrderPlaceTxService orderPlaceTxService;
     @Autowired
     private OrderEventPublisher orderEventPublisher;
 
@@ -69,10 +68,18 @@ public class OrderServiceImpl implements OrderService {
 
     /**
      * 直接下单：价格以 book 服务下单时刻返回为快照；图书不存在或价格为空时返回 null（控制器转 400）。
+     * 幂等预检前移到预占库存之前，重复请求不触碰库存；库存预占与落库在
+     * {@link OrderPlaceTxService#place} 的全局事务内，落库失败由 Seata 自动回滚预占。
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public OrderDetailVO createOrder(Long userId, OrderCreateRequest request) {
+        OrderDetailVO existing = findExistingOrder(userId, request.getClientRequestId());
+        if (existing != null) {
+            log.info("下单幂等命中，返回已有订单：userId={}, clientRequestId={}",
+                    userId, request.getClientRequestId());
+            return existing;
+        }
+
         BookSnapshot book = successfulData(bookClient.getBookById(request.getBookId()));
         if (book == null || book.getPrice() == null) {
             return null;
@@ -82,21 +89,33 @@ public class OrderServiceImpl implements OrderService {
                 new StockOperationItem(request.getBookId(), request.getQuantity()));
         BigDecimal totalAmount = book.getPrice().multiply(BigDecimal.valueOf(request.getQuantity()));
 
-        return placeOrder(userId, request.getClientRequestId(), stockItems, () -> {
-            Order order = insertOrderHead(userId, request.getClientRequestId(), totalAmount,
-                    request.getReceiverName(), request.getReceiverPhone(), request.getReceiverAddress());
-            insertOrderItem(order, book, request.getQuantity());
-            return order;
-        });
+        try {
+            Order order = orderPlaceTxService.place(stockItems, () -> {
+                Order created = insertOrderHead(userId, request.getClientRequestId(), totalAmount,
+                        request.getReceiverName(), request.getReceiverPhone(), request.getReceiverAddress());
+                insertOrderItem(created, book, request.getQuantity());
+                return created;
+            });
+            return getOrderDetail(order.getId(), userId);
+        } catch (DuplicateKeyException ex) {
+            // 并发幂等竞态：全局事务已回滚、预占库存已由 undo_log 自动还原，返回已有订单即可
+            return returnExistingOrder(userId, request.getClientRequestId(), ex);
+        }
     }
 
     /**
-     * 购物车下单：读取购物车已选条目创建多明细订单；校验全部发生在远程预占库存之前，
-     * 失败抛 {@link BusinessException} 且不触碰库存，避免补偿释放。
+     * 购物车下单：读取购物车已选条目创建多明细订单；幂等预检与商品校验全部发生在
+     * 远程预占库存之前，失败抛 {@link BusinessException} 且不触碰库存。
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public OrderDetailVO createOrderFromCart(Long userId, OrderFromCartRequest request) {
+        OrderDetailVO existing = findExistingOrder(userId, request.getClientRequestId());
+        if (existing != null) {
+            log.info("下单幂等命中，返回已有订单：userId={}, clientRequestId={}",
+                    userId, request.getClientRequestId());
+            return existing;
+        }
+
         List<CartItemSnapshot> cartItems = successfulData(cartClient.selectedItems(userId));
         if (cartItems == null || cartItems.isEmpty()) {
             throw new BusinessException(400, "购物车没有选中的商品");
@@ -126,36 +145,52 @@ public class OrderServiceImpl implements OrderService {
 
         List<StockOperationItem> stockItems = buildStockItems(books, quantities);
         BigDecimal finalTotalAmount = totalAmount;
-        // 一次预占所有商品，库存服务内部会整体回滚
-        return placeOrder(userId, request.getClientRequestId(), stockItems, () -> {
-            Order order = insertOrderHead(userId, request.getClientRequestId(), finalTotalAmount,
-                    request.getReceiverName(), request.getReceiverPhone(), request.getReceiverAddress());
-            for (int i = 0; i < books.size(); i++) {
-                insertOrderItem(order, books.get(i), quantities.get(i));
-            }
-            return order;
-        });
+        // 一次预占所有商品，库存服务内部会整体回滚；预占与落库同处一个全局事务
+        try {
+            Order order = orderPlaceTxService.place(stockItems, () -> {
+                Order created = insertOrderHead(userId, request.getClientRequestId(), finalTotalAmount,
+                        request.getReceiverName(), request.getReceiverPhone(), request.getReceiverAddress());
+                for (int i = 0; i < books.size(); i++) {
+                    insertOrderItem(created, books.get(i), quantities.get(i));
+                }
+                return created;
+            });
+            return getOrderDetail(order.getId(), userId);
+        } catch (DuplicateKeyException ex) {
+            // 并发幂等竞态：全局事务已回滚、预占库存已由 undo_log 自动还原，返回已有订单即可
+            return returnExistingOrder(userId, request.getClientRequestId(), ex);
+        }
     }
 
     /**
-     * 下单公共骨架：预占库存 → 落库+发关单消息 → 失败补偿。
-     * 远程预占在本地事务之外、不可回滚，落库失败必须显式补偿释放（见两个 catch）。
+     * 下单幂等预检：命中"用户ID + clientRequestId"唯一键说明重复提交，直接返回已有订单，
+     * 不触碰库存。并发窗口（预检时对方事务尚未提交）由插入冲突触发全局回滚后走
+     * {@link #returnExistingOrder} 兜底。
      */
-    private OrderDetailVO placeOrder(Long userId, String clientRequestId,
-                                     List<StockOperationItem> stockItems, Supplier<Order> orderWriter) {
-        reserveStock(stockItems);
-        try {
-            Order order = orderWriter.get();
-            publishCloseDelay(order.getId());
-            return getOrderDetail(order.getId(), userId);
-        } catch (DuplicateKeyException ex) {
-            // 幂等命中：释放本次预占，返回已有订单
-            return returnExistingOrder(userId, clientRequestId, stockItems, ex);
-        } catch (Exception ex) {
-            // 本地订单落库异常时补偿释放，避免库存被长期占用
-            releaseStockQuietly(stockItems);
-            throw ex;
+    private OrderDetailVO findExistingOrder(Long userId, String clientRequestId) {
+        Order existing = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
+                .eq(Order::getUserId, userId)
+                .eq(Order::getClientRequestId, clientRequestId)
+                .last("LIMIT 1"));
+        return existing == null ? null : getOrderDetail(existing.getId(), userId);
+    }
+
+    /**
+     * 并发幂等兜底：DuplicateKeyException 已触发全局事务回滚（预占库存由 Seata 基于 undo_log
+     * 自动还原），这里只负责查回并发请求创建的订单；查不到说明冲突另有原因，按原异常抛出。
+     */
+    private OrderDetailVO returnExistingOrder(Long userId, String clientRequestId,
+                                              DuplicateKeyException original) {
+        Order existing = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
+                .eq(Order::getUserId, userId)
+                .eq(Order::getClientRequestId, clientRequestId)
+                .last("LIMIT 1"));
+        if (existing == null) {
+            throw original;
         }
+        log.info("下单并发幂等命中，返回已有订单：orderId={}, clientRequestId={}",
+                existing.getId(), clientRequestId);
+        return getOrderDetail(existing.getId(), userId);
     }
 
     /**
@@ -186,25 +221,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * 下单幂等兜底：释放本次重复预占的库存后返回已有订单，保证重复提交无副作用。
-     */
-    private OrderDetailVO returnExistingOrder(Long userId, String clientRequestId,
-                                              List<StockOperationItem> stockItems,
-                                              DuplicateKeyException original) {
-        releaseStockQuietly(stockItems);
-        Order existing = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
-                .eq(Order::getUserId, userId)
-                .eq(Order::getClientRequestId, clientRequestId)
-                .last("LIMIT 1"));
-        if (existing == null) {
-            // 查不到说明冲突不是幂等键导致的，按原异常处理
-            throw original;
-        }
-        log.info("下单幂等命中，返回已有订单：orderId={}, clientRequestId={}", existing.getId(), clientRequestId);
-        return getOrderDetail(existing.getId(), userId);
-    }
-
-    /**
      * 插入订单明细：书名/单价取 book 服务下单时刻返回值做快照，之后图书改价不影响本明细。
      */
     private void insertOrderItem(Order order, BookSnapshot book, Integer quantity) {
@@ -226,41 +242,6 @@ public class OrderServiceImpl implements OrderService {
             items.add(new StockOperationItem(books.get(i).getId(), quantities.get(i)));
         }
         return items;
-    }
-
-    /**
-     * 远程预占库存；库存不足或远程返回非 200 时抛 BusinessException，下单终止且无需补偿。
-     */
-    private void reserveStock(List<StockOperationItem> items) {
-        StockOperationRequest request = new StockOperationRequest();
-        request.setItems(items);
-        requireSuccess(stockClient.deduct(request), 400, "库存不足，请稍后重试");
-    }
-
-    private void releaseStockQuietly(List<StockOperationItem> items) {
-        try {
-            // 下单补偿时没有可关联的订单，orderId/userId 传 null
-            orderEventPublisher.publishStockRelease(null, null, items);
-        } catch (Exception ex) {
-            // 补偿释放只记日志，不掩盖原始的订单异常
-            log.warn("订单创建失败后释放库存异常", ex);
-        }
-    }
-
-    private void publishCloseDelay(Long orderId) {
-        try {
-            orderEventPublisher.publishOrderCloseDelay(orderId);
-        } catch (Exception ex) {
-            // 延迟关单消息发送失败不阻断下单，兜底扫描任务会关闭漏网订单
-            log.warn("发布订单关单延迟消息失败：orderId={}", orderId, ex);
-        }
-    }
-
-    private void requireSuccess(Result<?> result, Integer code, String fallback) {
-        if (!isSuccess(result)) {
-            String message = result != null && result.getMessage() != null ? result.getMessage() : fallback;
-            throw new BusinessException(code, message);
-        }
     }
 
     private boolean isSuccess(Result<?> result) {

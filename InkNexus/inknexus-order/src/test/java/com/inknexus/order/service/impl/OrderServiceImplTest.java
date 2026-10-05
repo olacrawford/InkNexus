@@ -8,10 +8,8 @@ import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
 import com.inknexus.order.client.BookClient;
 import com.inknexus.order.client.CartClient;
-import com.inknexus.order.client.StockClient;
 import com.inknexus.order.client.dto.BookSnapshot;
 import com.inknexus.order.client.dto.CartItemSnapshot;
-import com.inknexus.order.client.dto.StockOperationRequest;
 import com.inknexus.order.dto.OrderCreateRequest;
 import com.inknexus.order.dto.OrderFromCartRequest;
 import com.inknexus.order.entity.Order;
@@ -19,6 +17,7 @@ import com.inknexus.order.entity.OrderItem;
 import com.inknexus.order.mapper.OrderItemMapper;
 import com.inknexus.order.mapper.OrderMapper;
 import com.inknexus.order.mq.OrderEventPublisher;
+import com.inknexus.order.service.OrderPlaceTxService;
 import com.inknexus.order.vo.OrderDetailVO;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +32,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -48,8 +48,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * OrderServiceImpl 纯单元测试：mock 全部 mapper/Feign/MQ 发布器，不启动 Spring 容器，
- * 重点守住下单幂等补偿、价格快照与“库存事件只发一次”等不变量。
+ * OrderServiceImpl 纯单元测试：mock 全部 mapper/Feign/MQ 发布器与全局事务骨架，不启动 Spring 容器，
+ * 重点守住下单幂等（预检前移 + 并发兜底）、价格快照与“库存事件只发一次”等不变量。
+ * 全局事务骨架自身的回滚行为见 {@link OrderPlaceTxServiceImplTest}。
  */
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplTest {
@@ -63,7 +64,7 @@ class OrderServiceImplTest {
     @Mock
     private CartClient cartClient;
     @Mock
-    private StockClient stockClient;
+    private OrderPlaceTxService orderPlaceTxService;
     @Mock
     private OrderEventPublisher orderEventPublisher;
 
@@ -202,21 +203,13 @@ class OrderServiceImplTest {
     }
 
     @Test
-    void createOrder_returnsExistingOrder_whenDuplicateRequestId() throws Exception {
-        BookSnapshot book = new BookSnapshot();
-        book.setId(5L);
-        book.setTitle("Java 编程思想");
-        book.setPrice(new BigDecimal("99.00"));
-
+    void createOrder_returnsExistingOrderWithoutTouchingStock_whenDuplicateRequestId() throws Exception {
         Order existing = new Order();
         existing.setId(100L);
         existing.setUserId(1L);
         existing.setClientRequestId("req-1");
 
-        when(bookClient.getBookById(5L)).thenReturn(Result.success(book));
-        when(stockClient.deduct(any(StockOperationRequest.class))).thenReturn(Result.success());
-        // 模拟唯一键 uk_user_request 冲突：同一用户已用相同请求号下过单
-        when(orderMapper.insert(any(Order.class))).thenThrow(new DuplicateKeyException("uk_user_request"));
+        // 幂等预检命中：同一用户已用相同请求号下过单
         when(orderMapper.selectOne(any())).thenReturn(existing);
         when(orderMapper.selectById(any())).thenReturn(existing);
         when(orderItemMapper.selectList(any())).thenReturn(List.of());
@@ -224,9 +217,58 @@ class OrderServiceImplTest {
         OrderDetailVO detail = orderService.createOrder(1L, buildCreateRequest("req-1"));
 
         assertEquals(100L, detail.getId());
-        // 重复请求本次预占的库存必须补偿释放，且不再创建新订单、不发关单消息
-        verify(orderEventPublisher).publishStockRelease(isNull(), isNull(), anyList());
+        // 不变量：预检前移后，重复请求不得触碰库存预占、不得远程查书、不得新建订单
+        verify(orderPlaceTxService, never()).place(anyList(), any());
+        verify(bookClient, never()).getBookById(any());
+        verify(orderEventPublisher, never()).publishStockRelease(isNull(), isNull(), anyList());
         verify(orderEventPublisher, never()).publishOrderCloseDelay(any());
+    }
+
+    @Test
+    void createOrder_returnsExistingOrder_withoutManualRelease_whenConcurrentDuplicateRequest() throws Exception {
+        Order existing = new Order();
+        existing.setId(100L);
+        existing.setUserId(1L);
+        existing.setClientRequestId("req-1");
+
+        BookSnapshot book = new BookSnapshot();
+        book.setId(5L);
+        book.setTitle("Java 编程思想");
+        book.setPrice(new BigDecimal("99.00"));
+
+        // 第一次 selectOne：幂等预检未命中（并发请求尚未提交）；第二次：兜底查回已有订单
+        when(orderMapper.selectOne(any())).thenReturn(null, existing);
+        when(bookClient.getBookById(5L)).thenReturn(Result.success(book));
+        // 并发插入撞 uk_user_request 唯一键，全局事务回滚后异常抛回编排层
+        when(orderPlaceTxService.place(anyList(), any()))
+                .thenThrow(new DuplicateKeyException("uk_user_request"));
+        when(orderMapper.selectById(any())).thenReturn(existing);
+        when(orderItemMapper.selectList(any())).thenReturn(List.of());
+
+        OrderDetailVO detail = orderService.createOrder(1L, buildCreateRequest("req-1"));
+
+        assertEquals(100L, detail.getId());
+        // Seata 已基于 undo_log 自动还原预占库存，编排层不得再发 MQ 手工补偿
+        verify(orderEventPublisher, never()).publishStockRelease(isNull(), isNull(), anyList());
+    }
+
+    @Test
+    void createOrder_propagatesFailure_whenGlobalTxSkeletonFailsForNonDuplicateReason() throws Exception {
+        BookSnapshot book = new BookSnapshot();
+        book.setId(5L);
+        book.setTitle("Java 编程思想");
+        book.setPrice(new BigDecimal("99.00"));
+
+        when(orderMapper.selectOne(any())).thenReturn(null);
+        when(bookClient.getBookById(5L)).thenReturn(Result.success(book));
+        // 模拟库存不足：BusinessException 原样抛给控制器转 400
+        when(orderPlaceTxService.place(anyList(), any()))
+                .thenThrow(new BusinessException(400, "库存不足：图书ID 5"));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> orderService.createOrder(1L, buildCreateRequest("req-1")));
+
+        assertEquals(400, ex.getCode());
     }
 
     @Test
@@ -240,9 +282,13 @@ class OrderServiceImplTest {
         created.setId(100L);
         created.setUserId(1L);
 
+        when(orderMapper.selectOne(any())).thenReturn(null);
         when(bookClient.getBookById(5L)).thenReturn(Result.success(book));
-        when(stockClient.deduct(any(StockOperationRequest.class))).thenReturn(Result.success());
-        // 模拟 MyBatis-Plus 插入后回填自增主键
+        // 让骨架真正执行落库 lambda，模拟 MyBatis-Plus 插入后回填自增主键
+        when(orderPlaceTxService.place(anyList(), any())).thenAnswer(invocation -> {
+            Supplier<Order> writer = invocation.getArgument(1);
+            return writer.get();
+        });
         when(orderMapper.insert(any(Order.class))).thenAnswer(invocation -> {
             Order inserting = invocation.getArgument(0);
             inserting.setId(100L);
@@ -257,8 +303,8 @@ class OrderServiceImplTest {
         ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
         verify(orderMapper).insert(captor.capture());
         assertEquals("req-1", captor.getValue().getClientRequestId());
-        // 下单成功后应发布超时关单延迟消息
-        verify(orderEventPublisher).publishOrderCloseDelay(100L);
+        // 预占与落库必须经由全局事务骨架，不允许绕开
+        verify(orderPlaceTxService).place(anyList(), any());
     }
 
     @Test
@@ -278,9 +324,13 @@ class OrderServiceImplTest {
         created.setId(100L);
         created.setUserId(1L);
 
+        when(orderMapper.selectOne(any())).thenReturn(null);
         when(cartClient.selectedItems(1L)).thenReturn(Result.success(List.of(item)));
         when(bookClient.listBooksByIds(List.of(5L))).thenReturn(Result.success(List.of(book)));
-        when(stockClient.deduct(any(StockOperationRequest.class))).thenReturn(Result.success());
+        when(orderPlaceTxService.place(anyList(), any())).thenAnswer(invocation -> {
+            Supplier<Order> writer = invocation.getArgument(1);
+            return writer.get();
+        });
         when(orderMapper.insert(any(Order.class))).thenAnswer(invocation -> {
             Order inserting = invocation.getArgument(0);
             inserting.setId(100L);
@@ -301,15 +351,16 @@ class OrderServiceImplTest {
         // N+1 回归守卫：购物车下单必须走一次批量拉取，不允许逐本单查
         verify(bookClient).listBooksByIds(List.of(5L));
         verify(bookClient, never()).getBookById(any());
-        verify(orderEventPublisher).publishOrderCloseDelay(100L);
+        verify(orderPlaceTxService).place(anyList(), any());
     }
 
     @Test
-    void createOrderFromCart_throwsWithoutReservingStock_whenBookMissing() {
+    void createOrderFromCart_throwsWithoutPlacingGlobalTx_whenBookMissing() {
         CartItemSnapshot item = new CartItemSnapshot();
         item.setBookId(5L);
         item.setQuantity(2);
 
+        when(orderMapper.selectOne(any())).thenReturn(null);
         when(cartClient.selectedItems(1L)).thenReturn(Result.success(List.of(item)));
         // 批量结果里没有 bookId=5：图书不存在或已下架
         when(bookClient.listBooksByIds(List.of(5L))).thenReturn(Result.success(List.of()));
@@ -323,8 +374,8 @@ class OrderServiceImplTest {
                 () -> orderService.createOrderFromCart(1L, request));
 
         assertEquals(400, ex.getCode());
-        // 校验失败发生在预占之前，绝不能动库存
-        verify(stockClient, never()).deduct(any());
+        // 校验失败发生在全局事务之前，绝不能动库存
+        verify(orderPlaceTxService, never()).place(anyList(), any());
     }
 
     private OrderCreateRequest buildCreateRequest(String clientRequestId) {

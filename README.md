@@ -6,9 +6,9 @@
 
 - 微服务拆分清晰：认证、图书、购物车、库存、支付、订单六个业务服务 + 网关、公共模块独立演进
 - 前后端分离：Vue 3 前端通过 Gateway 与各业务服务联通
-- 企业常见基础能力已接入：Nacos、Nacos Config、Gateway、OpenFeign、Redis、Sentinel、RabbitMQ
+- 企业常见基础能力已接入：Nacos、Nacos Config、Gateway、OpenFeign、Redis、Sentinel、RabbitMQ、Seata
 - 缓存三级防护：空值缓存防穿透、SETNX 分布式锁互斥重建 + Lua 原子释放防击穿、TTL 随机抖动 + 分级过期防雪崩
-- 订单-库存一致性：SQL 条件更新 + 三态库存防超卖，下单唯一索引、支付状态 CAS、消息 eventId 去重三层幂等，RabbitMQ 延迟消息超时关单、消费重试 + 死信队列 + 发布确认
+- 订单-库存一致性：同步下单链路引入 Seata AT 模式（@GlobalTransactional + undo_log 自动回滚预占库存，消除手工补偿的泄漏隐患）；SQL 条件更新 + 三态库存防超卖；下单唯一索引、支付状态 CAS、消息 eventId 去重多层幂等；异步链路（支付确认、取消/超时释放）保留 RabbitMQ 事件驱动 + 延迟消息超时关单 + 消费重试 + 死信队列 + 发布确认
 - 网关统一鉴权：JWT 校验 + 用户身份/角色透传（X-User-Id / X-User-Role），图书管理接口仅管理员可用；服务间内部端点（如库存预占 `/stock/deduct`）经网关对外封禁，仅限 Feign 直连调用
 - 全链路 TraceId：网关生成透传，跨服务日志可串联，异常响应只带 traceId 不泄漏内部信息
 - 接口文档：Knife4j 自动生成在线文档
@@ -26,6 +26,7 @@
 | 网关 | Spring Cloud Gateway |
 | 服务调用 | OpenFeign |
 | 消息队列 | RabbitMQ |
+| 分布式事务 | Seata 2.5.0（AT 模式，下单链路） |
 | 数据访问 | MyBatis-Plus |
 | 数据库 | MySQL 8.x |
 | 前端 | Vue 3, Vite, Vue Router, Axios |
@@ -37,7 +38,7 @@
 InkNexus/
 ├─ InkNexus/        后端微服务工程
 ├─ front/           前端工程
-├─ sql/             数据库初始化脚本（sql.txt，10 张表 + 种子数据）
+├─ sql/             数据库初始化脚本（sql.txt，11 张表 + 种子数据，含 Seata undo_log）
 ├─ nacos-config/    Nacos 配置中心脚本
 └─ 说明文档/         模块说明文档
 ```
@@ -111,7 +112,7 @@ Browser
 ### 1. 基础环境
 
 - macOS（Apple Silicon）+ IDEA 启动 Java 服务
-- Docker Desktop + `docker-compose.infra.yml` 启动 MySQL、Nacos、Redis、RabbitMQ
+- Docker Desktop + `docker-compose.infra.yml` 启动 MySQL、Nacos、Redis、RabbitMQ、Seata TC
 
 ### 2. 启动基础设施
 
@@ -134,7 +135,7 @@ bash scripts/dev-macos.sh
 
 ### 3. 导入数据库
 
-新环境初始化直接执行 [sql/sql.txt](sql/sql.txt) 即可，脚本已包含用户、图书、购物车、库存、订单、支付、MQ 消费去重等全部 10 张表和默认库存。
+新环境初始化直接执行 [sql/sql.txt](sql/sql.txt) 即可，脚本已包含用户、图书、购物车、库存、订单、支付、MQ 消费去重等全部 10 张业务表、Seata `undo_log` 表和默认库存。
 
 旧版本存量环境如需升级，直接参考 Git 历史中的增量脚本（`git log -- sql/`），或备份数据后重新执行 `sql.txt`。两点注意：`t_user.role` 需要把管理员账号手动 `UPDATE` 为 `ADMIN`；升级到含死信参数的队列版本后需删除旧 RabbitMQ 队列让服务重新声明。
 
