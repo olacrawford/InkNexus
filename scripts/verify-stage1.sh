@@ -1,6 +1,10 @@
 #!/bin/bash
 # 功能验证第一阶段：auth / book / stock / cart（全部经网关 8080）
 GW=http://localhost:8080/api
+# 验证凭据从环境变量读取（用法：INKNEXUS_DB_PWD=... INKNEXUS_TEST_PWD=... bash verify-stage1.sh），
+# 缺省语义与 sql.txt 种子数据一致，脚本内不落字面量凭据
+DB_PWD="${INKNEXUS_DB_PWD:?set INKNEXUS_DB_PWD to the local MySQL root password}"
+TEST_PWD="${INKNEXUS_TEST_PWD:?set INKNEXUS_TEST_PWD to the seeded test password}"
 TS=$(date +%s)
 USER="verify_${TS}"
 PASS=0; FAIL=0; FAILED_CASES=""
@@ -13,14 +17,14 @@ codeof() { echo "$1" | jq -r '.code'; }
 
 echo "===== auth ====="
 R=$(curl -s -X POST $GW/auth/register -H 'Content-Type: application/json' \
-  -d "{\"username\":\"$USER\",\"password\":\"Test123456\",\"nickname\":\"验证用户\",\"phone\":\"1380000$TS\",\"email\":\"$USER@test.com\"}")
+  -d "{\"username\":\"$USER\",\"password\":\"$TEST_PWD\",\"nickname\":\"验证用户\",\"phone\":\"1380000$TS\",\"email\":\"$USER@test.com\"}")
 check "注册新用户" 200 "$(codeof "$R")"
 
 R=$(curl -s -X POST $GW/auth/register -H 'Content-Type: application/json' \
-  -d "{\"username\":\"$USER\",\"password\":\"Test123456\",\"nickname\":\"重复\",\"phone\":\"1380000$TS\",\"email\":\"$USER@test.com\"}")
+  -d "{\"username\":\"$USER\",\"password\":\"$TEST_PWD\",\"nickname\":\"重复\",\"phone\":\"1380000$TS\",\"email\":\"$USER@test.com\"}")
 [ "$(codeof "$R")" != "200" ] && { PASS=$((PASS+1)); echo "PASS  重复注册被拒绝 ($(echo "$R"|jq -r '.message'))"; } || { FAIL=$((FAIL+1)); echo "FAIL  重复注册未被拒绝"; }
 
-R=$(curl -s -X POST $GW/auth/login -H 'Content-Type: application/json' -d "{\"username\":\"$USER\",\"password\":\"Test123456\"}")
+R=$(curl -s -X POST $GW/auth/login -H 'Content-Type: application/json' -d "{\"username\":\"$USER\",\"password\":\"$TEST_PWD\"}")
 check "正确密码登录" 200 "$(codeof "$R")"
 TOKEN=$(echo "$R" | jq -r '.data.token // .data')
 [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ] && { PASS=$((PASS+1)); echo "PASS  拿到 JWT (${#TOKEN} chars)"; } || { FAIL=$((FAIL+1)); echo "FAIL  未拿到 JWT"; }

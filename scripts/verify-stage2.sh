@@ -2,11 +2,13 @@
 # 功能验证第二阶段：order + stock + payment 全链路（下单/幂等/支付/MQ/取消/完成/超时兜底）
 # 库存断言全部基于执行时快照的增量计算，可重复执行。
 GW=http://localhost:8080/api
+# 数据库凭据从环境变量读取（INKNEXUS_DB_PWD），脚本内不落字面量凭据
+DB_PWD="${INKNEXUS_DB_PWD:?set INKNEXUS_DB_PWD to the local MySQL root password}"
 TOKEN=$(cat /tmp/inknexus_verify_token)
 OH="Authorization: Bearer $TOKEN"
 PASS=0; FAIL=0; FAILED_CASES=""
 check() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); echo "PASS  $1"; else FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES\n  - $1 (期望=$2 实际=$3)"; echo "FAIL  $1 (期望=$2 实际=$3)"; fi }
-q() { mysql -h127.0.0.1 -uroot -p123456 inknexus -N -e "$1" 2>/dev/null; }
+q() { mysql -h127.0.0.1 -uroot -p"$DB_PWD" inknexus -N -e "$1" 2>/dev/null; }
 stockrow() { q "SELECT CONCAT(stock,'/',locked_stock) FROM t_book_stock WHERE book_id=$1"; }
 snap() { local v; v=$(stockrow "$1"); echo "$v"; }
 uuid() { python3 -c "import uuid;print(uuid.uuid4())"; }

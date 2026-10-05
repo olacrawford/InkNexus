@@ -1,11 +1,14 @@
 #!/bin/bash
 # 功能验证第三阶段：网关安全（401/403/防伪造）+ 管理员图书 CRUD + 缓存防护 + TraceId
 GW=http://localhost:8080/api
+# 数据库/测试凭据从环境变量读取（INKNEXUS_DB_PWD、INKNEXUS_TEST_PWD），脚本内不落字面量凭据
+DB_PWD="${INKNEXUS_DB_PWD:?set INKNEXUS_DB_PWD to the local MySQL root password}"
+TEST_PWD="${INKNEXUS_TEST_PWD:?set INKNEXUS_TEST_PWD to the seeded test password}"
 TOKEN=$(cat /tmp/inknexus_verify_token)
 UH="Authorization: Bearer $TOKEN"
 PASS=0; FAIL=0; FAILED_CASES=""
 check() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); echo "PASS  $1"; else FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES\n  - $1 (期望=$2 实际=$3)"; echo "FAIL  $1 (期望=$2 实际=$3)"; fi }
-q() { mysql -h127.0.0.1 -uroot -p123456 inknexus -N -e "$1" 2>/dev/null; }
+q() { mysql -h127.0.0.1 -uroot -p"$DB_PWD" inknexus -N -e "$1" 2>/dev/null; }
 
 echo "===== 网关安全 ====="
 C=$(curl -s -o /dev/null -w '%{http_code}' -X POST $GW/cart -H 'Content-Type: application/json' -d '{"bookId":1,"quantity":1}')
@@ -31,7 +34,7 @@ check "无 token 调内部扣库存 → 403" 403 "$R"
 
 echo "===== 管理员图书 CRUD ====="
 q "UPDATE t_user SET role='ADMIN' WHERE id=$MYID"
-R=$(curl -s -X POST $GW/auth/login -H 'Content-Type: application/json' -d '{"username":"'"$(q "SELECT username FROM t_user WHERE id=$MYID")"'","password":"Test123456"}')
+R=$(curl -s -X POST $GW/auth/login -H 'Content-Type: application/json' -d '{"username":"'"$(q "SELECT username FROM t_user WHERE id=$MYID")"'","password":"'"$TEST_PWD"'"}')
 ATOKEN=$(echo "$R" | jq -r '.data.token // .data')
 AH="Authorization: Bearer $ATOKEN"
 R=$(curl -s -X POST $GW/books -H "$AH" -H 'Content-Type: application/json' -d '{"title":"验证之书","author":"验证员","price":42.00,"categoryId":2,"description":"自动化验证创建"}')
