@@ -40,7 +40,7 @@ InkNexus/
 ├─ front/           前端工程
 ├─ sql/             数据库初始化脚本（sql.txt，11 张表 + 种子数据，含 Seata undo_log）
 ├─ nacos-config/    Nacos 配置中心脚本
-└─ 说明文档/         模块说明文档
+└─ scripts/         环境引导与功能验证脚本
 ```
 
 ## 模块与端口
@@ -209,17 +209,4 @@ for i in $(seq 1 100); do curl -s -o /dev/null "http://localhost:8080/api/books/
 
 ## 文档目录
 
-- [说明文档/InkNexus-基础设施搭建说明.md](说明文档/InkNexus-基础设施搭建说明.md)
-- [说明文档/InkNexus-auth说明文档.md](说明文档/InkNexus-auth说明文档.md)
-- [说明文档/InkNexus-book说明文档.md](说明文档/InkNexus-book说明文档.md)
-- [说明文档/InkNexus-cart说明文档.md](说明文档/InkNexus-cart说明文档.md)
-- [说明文档/InkNexus-stock说明文档.md](说明文档/InkNexus-stock说明文档.md)
-- [说明文档/InkNexus-payment说明文档.md](说明文档/InkNexus-payment说明文档.md)
-- [说明文档/InkNexus-order说明文档.md](说明文档/InkNexus-order说明文档.md)
-- [说明文档/InkNexus-gateway说明文档.md](说明文档/InkNexus-gateway说明文档.md)
-- [说明文档/InkNexus-ai-assistant说明文档.md](说明文档/InkNexus-ai-assistant说明文档.md)
-- [说明文档/InkNexus-数据库设计说明.md](说明文档/InkNexus-数据库设计说明.md)
-- [说明文档/InkNexus-增强项实施说明.md](说明文档/InkNexus-增强项实施说明.md)
-- [说明文档/InkNexus-Nginx部署说明.md](说明文档/InkNexus-Nginx部署说明.md)
-- [说明文档/InkNexus-改进方案.md](说明文档/InkNexus-改进方案.md)
-- [说明文档/README.md](说明文档/README.md)
+各模块的详细说明文档（auth/book/cart/stock/order/payment/gateway/ai-assistant、数据库设计、部署与验证说明）在本地 `说明文档/` 目录维护，不随仓库分发。运行环境与启动步骤见上文，接口文档通过 Knife4j 在线查看（各服务 `/doc.html`）。
