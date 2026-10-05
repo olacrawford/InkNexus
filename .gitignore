@@ -22,3 +22,13 @@ META-INF/
 
 # Local agent skills (separate git repo, kept out of the project repo)
 .agents/
+.zcode/
+
+# Security scan artifacts
+.mimosa/
+
+# Local-only docs, benchmark results and workspace instructions
+# (kept on disk for daily development, excluded from the remote repo)
+说明文档/
+benchmark/
+AGENTS.md
