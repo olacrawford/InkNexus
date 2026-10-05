@@ -29,12 +29,15 @@ import java.util.UUID;
 @Service
 public class PaymentServiceImpl implements PaymentService {
 
-    @Autowired
-    private PaymentMapper paymentMapper;
-    @Autowired
-    private OrderClient orderClient;
-    @Autowired
-    private PaySuccessPublisher paySuccessPublisher;
+    private final PaymentMapper paymentMapper;
+    private final OrderClient orderClient;
+    private final PaySuccessPublisher paySuccessPublisher;
+
+    public PaymentServiceImpl(PaymentMapper paymentMapper, OrderClient orderClient, PaySuccessPublisher paySuccessPublisher) {
+        this.paymentMapper = paymentMapper;
+        this.orderClient = orderClient;
+        this.paySuccessPublisher = paySuccessPublisher;
+    }
 
     /**
      * 发起（模拟）支付。整个方法在一个事务内：远程校验订单 → 查/建支付单 → 发布 PaySuccess。

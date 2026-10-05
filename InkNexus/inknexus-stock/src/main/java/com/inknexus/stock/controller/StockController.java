@@ -5,7 +5,6 @@ import com.inknexus.stock.dto.StockOperationRequest;
 import com.inknexus.stock.service.StockService;
 import com.inknexus.stock.vo.StockVO;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,8 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/stock")
 public class StockController {
 
-    @Autowired
-    private StockService stockService;
+    private final StockService stockService;
+
+    public StockController(StockService stockService) {
+        this.stockService = stockService;
+    }
 
     @GetMapping("/hello")
     public Result<String> hello() {

@@ -24,10 +24,13 @@ import java.util.List;
 @Service
 public class StockServiceImpl implements StockService {
 
-    @Autowired
-    private StockMapper stockMapper;
-    @Autowired
-    private MqConsumedLogMapper mqConsumedLogMapper;
+    private final StockMapper stockMapper;
+    private final MqConsumedLogMapper mqConsumedLogMapper;
+
+    public StockServiceImpl(StockMapper stockMapper, MqConsumedLogMapper mqConsumedLogMapper) {
+        this.stockMapper = stockMapper;
+        this.mqConsumedLogMapper = mqConsumedLogMapper;
+    }
 
     /**
      * 查询库存账目。
