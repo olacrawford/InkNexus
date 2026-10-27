@@ -1,6 +1,7 @@
 package com.inknexus.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.mq.PaySuccessMessage;
 import com.inknexus.common.result.Result;
@@ -81,7 +82,7 @@ public class PaymentServiceImpl implements PaymentService {
         // 只允许当前用户查询自己的支付单
         Payment payment = findByOrderId(userId, orderId);
         if (payment == null) {
-            throw new BusinessException(404, "支付单不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND, "支付单不存在");
         }
         return toVO(payment);
     }
@@ -96,19 +97,19 @@ public class PaymentServiceImpl implements PaymentService {
         // 远程调用订单服务，避免支付服务直接信任前端传入的订单信息
         Result<OrderSnapshot> result = orderClient.getOrderDetail(orderId, userId);
         if (result == null || !Integer.valueOf(200).equals(result.getCode()) || result.getData() == null) {
-            throw new BusinessException(404, "订单不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND, "订单不存在");
         }
         OrderSnapshot order = result.getData();
         if (!order.getUserId().equals(userId)) {
-            throw new BusinessException(403, "无权限支付该订单");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权限支付该订单");
         }
         // 状态 2=已取消 3=已完成，均已是终态，拒绝支付
         if (order.getStatus() != null && (order.getStatus() == 2 || order.getStatus() == 3)) {
-            throw new BusinessException(400, "订单当前状态不可支付");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "订单当前状态不可支付");
         }
         // 即使超时任务还没执行，也不允许继续支付已过期订单
         if (order.getExpireTime() != null && order.getExpireTime().isBefore(LocalDateTime.now())) {
-            throw new BusinessException(400, "订单已超时，请重新下单");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "订单已超时，请重新下单");
         }
         return order;
     }
@@ -159,7 +160,7 @@ public class PaymentServiceImpl implements PaymentService {
             message.setPayTime(payment.getPayTime());
             paySuccessPublisher.publish(message);
         } catch (Exception ex) {
-            throw new BusinessException(500, "支付确认消息发送失败，请稍后重试");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "支付确认消息发送失败，请稍后重试");
         }
     }
 

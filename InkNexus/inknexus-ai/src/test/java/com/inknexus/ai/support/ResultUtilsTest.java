@@ -1,5 +1,6 @@
 package com.inknexus.ai.support;
 
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,7 @@ class ResultUtilsTest {
 
     @Test
     void data_throwsBusinessException_whenCodeNot200() {
-        Result<String> result = Result.fail(404, "图书不存在");
+        Result<String> result = Result.fail(ErrorCode.NOT_FOUND);
         BusinessException ex = assertThrows(BusinessException.class, () -> ResultUtils.data(result));
         assertEquals(404, ex.getCode());
     }

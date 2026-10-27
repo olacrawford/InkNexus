@@ -9,6 +9,7 @@ import com.inknexus.cart.entity.CartItem;
 import com.inknexus.cart.mapper.CartItemMapper;
 import com.inknexus.cart.service.CartService;
 import com.inknexus.cart.vo.CartItemVO;
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -119,7 +120,7 @@ public class CartServiceImpl implements CartService {
                 .eq(CartItem::getId, cartItemId)
                 .eq(CartItem::getUserId, userId));
         if (item == null) {
-            throw new BusinessException(404, "购物车商品不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND, "购物车商品不存在");
         }
         return item;
     }
@@ -132,7 +133,7 @@ public class CartServiceImpl implements CartService {
     private void validateBook(Long bookId) {
         Result<BookSnapshot> result = bookClient.getBookById(bookId);
         if (result == null || !Integer.valueOf(200).equals(result.getCode()) || result.getData() == null) {
-            throw new BusinessException(400, "图书不存在或已下架");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "图书不存在或已下架");
         }
     }
 

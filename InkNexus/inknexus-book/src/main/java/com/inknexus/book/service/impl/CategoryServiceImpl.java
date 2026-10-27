@@ -7,6 +7,7 @@ import com.inknexus.book.entity.Category;
 import com.inknexus.book.mapper.CategoryMapper;
 import com.inknexus.book.service.CategoryService;
 import com.inknexus.book.vo.CategoryVO;
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
@@ -44,6 +45,6 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     public List<CategoryVO> listCategoriesBlocked(BlockException e) {
-        throw new BusinessException(429, "分类列表请求过于频繁，请稍后再试");
+        throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS, "分类列表请求过于频繁，请稍后再试");
     }
 }

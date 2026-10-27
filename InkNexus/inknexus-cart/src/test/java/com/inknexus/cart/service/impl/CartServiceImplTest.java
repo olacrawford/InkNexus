@@ -6,6 +6,7 @@ import com.inknexus.cart.dto.CartItemCreateRequest;
 import com.inknexus.cart.entity.CartItem;
 import com.inknexus.cart.mapper.CartItemMapper;
 import com.inknexus.cart.vo.CartItemVO;
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
 import org.junit.jupiter.api.Test;
@@ -78,7 +79,7 @@ class CartServiceImplTest {
 
     @Test
     void add_throws_whenBookIsNotAvailable() {
-        when(bookClient.getBookById(2L)).thenReturn(Result.fail(404, "图书不存在"));
+        when(bookClient.getBookById(2L)).thenReturn(Result.fail(ErrorCode.NOT_FOUND));
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> cartService.add(1L, request(2L, 1, true)));

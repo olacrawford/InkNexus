@@ -7,6 +7,7 @@ import com.inknexus.auth.entity.UserAddress;
 import com.inknexus.auth.mapper.UserAddressMapper;
 import com.inknexus.auth.service.AddressService;
 import com.inknexus.auth.vo.AddressVO;
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -134,7 +135,7 @@ public class AddressServiceImpl implements AddressService {
                 .eq(UserAddress::getId, addressId)
                 .eq(UserAddress::getUserId, userId));
         if (address == null) {
-            throw new BusinessException(404, "地址不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND, "地址不存在");
         }
         return address;
     }

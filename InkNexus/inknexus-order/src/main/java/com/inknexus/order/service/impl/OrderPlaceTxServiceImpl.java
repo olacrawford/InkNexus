@@ -1,5 +1,6 @@
 package com.inknexus.order.service.impl;
 
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
 import com.inknexus.order.client.StockClient;
@@ -56,7 +57,7 @@ public class OrderPlaceTxServiceImpl implements OrderPlaceTxService {
         if (result == null || !Integer.valueOf(200).equals(result.getCode())) {
             String message = result != null && result.getMessage() != null
                     ? result.getMessage() : "库存不足，请稍后重试";
-            throw new BusinessException(400, message);
+            throw new BusinessException(ErrorCode.PARAM_ERROR, message);
         }
     }
 

@@ -63,7 +63,7 @@ class OrderPlaceTxServiceImplTest {
     @Test
     void place_throws400WithoutWritingOrder_whenStockServiceRejects() throws Exception {
         when(stockClient.deduct(any(StockOperationRequest.class)))
-                .thenReturn(Result.fail(400, "库存不足：图书ID 5"));
+                .thenReturn(new Result<>(400, "库存不足：图书ID 5", null));
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> txService.place(List.of(new StockOperationItem(5L, 99)),

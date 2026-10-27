@@ -1,5 +1,6 @@
 package com.inknexus.order.controller;
 
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.result.Result;
 import com.inknexus.order.dto.OrderCreateRequest;
 import com.inknexus.order.dto.OrderFromCartRequest;
@@ -33,7 +34,7 @@ public class OrderController {
                                              @Valid @RequestBody OrderCreateRequest request) {
         OrderDetailVO detail = orderService.createOrder(userId, request);
         if (detail == null) {
-            return Result.fail(400, "下单失败，请检查图书信息");
+            return Result.fail(ErrorCode.ORDER_PLACE_FAILED);
         }
         return Result.success(detail);
     }
@@ -54,7 +55,7 @@ public class OrderController {
                                                 @PathVariable("id") Long id) {
         OrderDetailVO detail = orderService.getOrderDetail(id, userId);
         if (detail == null) {
-            return Result.fail(404, "订单不存在");
+            return Result.fail(ErrorCode.NOT_FOUND);
         }
         return Result.success(detail);
     }
@@ -65,7 +66,7 @@ public class OrderController {
         boolean cancelled = orderService.cancelOrder(id, userId);
         // false 可能是订单不存在、非本人或状态不允许，对外统一按 404 语义返回
         if (!cancelled) {
-            return Result.fail(404, "订单不存在");
+            return Result.fail(ErrorCode.NOT_FOUND);
         }
         return Result.success("取消成功");
     }
@@ -75,7 +76,7 @@ public class OrderController {
                                         @PathVariable("id") Long id) {
         boolean completed = orderService.completeOrder(id, userId);
         if (!completed) {
-            return Result.fail(404, "订单不存在或不可确认收货");
+            return Result.fail(ErrorCode.NOT_FOUND);
         }
         return Result.success("确认收货成功");
     }

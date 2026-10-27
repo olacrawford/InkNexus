@@ -3,11 +3,7 @@ package com.inknexus.common.exception;
 import com.inknexus.common.constant.ErrorCode;
 import lombok.Getter;
 
-/**
- * 统一业务异常：业务层校验失败（如库存不足、地址不存在）时主动抛出，
- * 携带错误码与用户可读提示，由 GlobalExceptionHandler 统一转成 {@link com.inknexus.common.result.Result}
- * 失败响应返回，不会落进 500 兜底，日志只记 warn 不打堆栈。
- */
+
 @Getter
 public class BusinessException extends RuntimeException {
 
@@ -20,7 +16,13 @@ public class BusinessException extends RuntimeException {
         this.code = errorCode.getCode();
     }
 
-    /** 自定义错误码与文案构造：适合给出具体原因的场景（如 409 + "库存不足"）。 */
+    /** 码取枚举语义、文案现场给：service 层主力构造器（如「库存不足：图书ID x」这类带动态详情的提示）。 */
+    public BusinessException(ErrorCode errorCode, String message) {
+        super(message);
+        this.code = errorCode.getCode();
+    }
+
+    /** 自定义错误码与文案构造：仅限运行时才能确定码的场景（如 Feign 转包透传下游 code），固定码一律走枚举。 */
     public BusinessException(Integer code, String message) {
         super(message);
         this.code = code;

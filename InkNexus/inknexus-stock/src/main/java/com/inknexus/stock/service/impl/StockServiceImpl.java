@@ -1,6 +1,7 @@
 package com.inknexus.stock.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.stock.dto.StockOperationItem;
 import com.inknexus.stock.entity.BookStock;
@@ -42,7 +43,7 @@ public class StockServiceImpl implements StockService {
         BookStock row = stockMapper.selectOne(new LambdaQueryWrapper<BookStock>()
                 .eq(BookStock::getBookId, bookId));
         if (row == null) {
-            throw new BusinessException(404, "库存不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND, "库存不存在");
         }
         return toVO(row);
     }
@@ -58,7 +59,7 @@ public class StockServiceImpl implements StockService {
             // 原子更新失败说明库存不足，事务会回滚本次所有预占
             int affected = stockMapper.deductStock(item.getBookId(), item.getQuantity());
             if (affected == 0) {
-                throw new BusinessException(400, "库存不足：图书ID " + item.getBookId());
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "库存不足：图书ID " + item.getBookId());
             }
         }
     }
@@ -104,7 +105,7 @@ public class StockServiceImpl implements StockService {
             // 支付完成才允许确认；锁定库存不足时抛出异常，让订单事务回滚
             int affected = stockMapper.confirmStock(item.getBookId(), item.getQuantity());
             if (affected == 0 && !alreadyConfirmed(item.getBookId())) {
-                throw new BusinessException(500, "库存确认失败：图书ID " + item.getBookId());
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "库存确认失败：图书ID " + item.getBookId());
             }
         }
         return true;

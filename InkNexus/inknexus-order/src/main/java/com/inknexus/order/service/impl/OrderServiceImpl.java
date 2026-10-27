@@ -2,6 +2,7 @@ package com.inknexus.order.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
 import com.inknexus.order.client.BookClient;
@@ -118,14 +119,14 @@ public class OrderServiceImpl implements OrderService {
 
         List<CartItemSnapshot> cartItems = successfulData(cartClient.selectedItems(userId));
         if (cartItems == null || cartItems.isEmpty()) {
-            throw new BusinessException(400, "购物车没有选中的商品");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "购物车没有选中的商品");
         }
 
         // 一次批量拉取所有图书，避免逐本 Feign 调用使下单延迟随商品数线性增长
         List<Long> bookIds = cartItems.stream().map(CartItemSnapshot::getBookId).toList();
         List<BookSnapshot> fetchedBooks = successfulData(bookClient.listBooksByIds(bookIds));
         if (fetchedBooks == null) {
-            throw new BusinessException(400, "购物车中有图书不存在或已下架");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "购物车中有图书不存在或已下架");
         }
         Map<Long, BookSnapshot> bookMap = fetchedBooks.stream()
                 .collect(Collectors.toMap(BookSnapshot::getId, b -> b));
@@ -136,7 +137,7 @@ public class OrderServiceImpl implements OrderService {
         for (CartItemSnapshot item : cartItems) {
             BookSnapshot book = bookMap.get(item.getBookId());
             if (book == null || book.getPrice() == null) {
-                throw new BusinessException(400, "购物车中有图书不存在或已下架");
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "购物车中有图书不存在或已下架");
             }
             books.add(book);
             quantities.add(item.getQuantity());
@@ -437,7 +438,7 @@ public class OrderServiceImpl implements OrderService {
         try {
             orderEventPublisher.publishOrderPaid(orderId, userId, items);
         } catch (Exception ex) {
-            throw new BusinessException(500, "订单支付事件发送失败，请稍后重试");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "订单支付事件发送失败，请稍后重试");
         }
     }
 
@@ -448,7 +449,7 @@ public class OrderServiceImpl implements OrderService {
         try {
             orderEventPublisher.publishStockRelease(orderId, userId, items);
         } catch (Exception ex) {
-            throw new BusinessException(500, "库存释放事件发送失败，请稍后重试");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "库存释放事件发送失败，请稍后重试");
         }
     }
 }

@@ -9,6 +9,7 @@ import com.inknexus.auth.service.UserService;
 import com.inknexus.auth.util.JwtUtil;
 import com.inknexus.auth.vo.LoginResponse;
 import com.inknexus.auth.vo.UserVO;
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,7 +55,7 @@ public class UserServiceImpl implements UserService {
         User exists = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, request.getUsername()));
         if (exists != null) {
-            throw new BusinessException(400, "用户名已存在");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "用户名已存在");
         }
 
         User user = new User();
@@ -82,12 +83,12 @@ public class UserServiceImpl implements UserService {
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, request.getUsername()));
         if (user == null) {
-            throw new BusinessException(400, "用户不存在");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "用户不存在");
         }
 
         // BCrypt 密文无法逆明文，只能用 matches 对比
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new BusinessException(400, "密码错误");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "密码错误");
         }
 
         String token = jwtUtil.generateToken(user);

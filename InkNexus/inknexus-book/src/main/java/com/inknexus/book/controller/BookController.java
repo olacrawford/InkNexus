@@ -7,6 +7,7 @@ import com.inknexus.book.service.CategoryService;
 import com.inknexus.book.vo.BookDetailVO;
 import com.inknexus.book.vo.BookVO;
 import com.inknexus.book.vo.CategoryVO;
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.result.PageResult;
 import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
@@ -53,7 +54,7 @@ public class BookController {
         // Service 返回 null 代表「不存在 / 已下架」，这里转成 404 业务码而非抛异常
         BookDetailVO book = bookService.getBookById(id);
         if (book == null) {
-            return Result.fail(404, "图书不存在");
+            return Result.fail(ErrorCode.NOT_FOUND);
         }
         return Result.success(book);
     }
@@ -77,7 +78,7 @@ public class BookController {
                                            @Valid @RequestBody BookUpdateRequest request) {
         BookDetailVO book = bookService.updateBook(id, request);
         if (book == null) {
-            return Result.fail(404, "图书不存在");
+            return Result.fail(ErrorCode.NOT_FOUND);
         }
         return Result.success(book);
     }
@@ -86,7 +87,7 @@ public class BookController {
     public Result<String> deleteBook(@PathVariable("id") Long id) {
         boolean deleted = bookService.deleteBook(id);
         if (!deleted) {
-            return Result.fail(404, "图书不存在");
+            return Result.fail(ErrorCode.NOT_FOUND);
         }
         return Result.success("删除成功");
     }

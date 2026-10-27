@@ -12,6 +12,7 @@ import com.inknexus.book.service.BookService;
 import com.inknexus.book.support.BookDetailCache;
 import com.inknexus.book.vo.BookDetailVO;
 import com.inknexus.book.vo.BookVO;
+import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.PageResult;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,7 +50,7 @@ public class BookServiceImpl implements BookService {
     }
 
     public List<BookVO> listBooksBlocked(BlockException e) {
-        throw new BusinessException(429, "图书列表请求过于频繁，请稍后再试");
+        throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS, "图书列表请求过于频繁，请稍后再试");
     }
 
     /**
@@ -69,11 +70,11 @@ public class BookServiceImpl implements BookService {
     }
 
     public BookDetailVO getBookByIdBlocked(BlockException e) {
-        throw new BusinessException(429, "图书详情请求过于频繁，请稍后再试");
+        throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS, "图书详情请求过于频繁，请稍后再试");
     }
 
     public PageResult<BookVO> pageBooksBlocked(BlockException e) {
-        throw new BusinessException(429, "图书分页请求过于频繁，请稍后再试");
+        throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS, "图书分页请求过于频繁，请稍后再试");
     }
 
     /** 查询图书详情；详情走手写 Cache-Aside 防击穿/穿透（见 {@link BookDetailCache}），不存在返回 null */
