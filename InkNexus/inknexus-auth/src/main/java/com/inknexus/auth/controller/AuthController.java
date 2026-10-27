@@ -7,7 +7,7 @@ import com.inknexus.auth.vo.LoginResponse;
 import com.inknexus.auth.vo.UserVO;
 import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -17,10 +17,10 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
-    @Autowired
-    private UserService userService;
+    private final UserService userService;
 
     @GetMapping("/hello")
     public Result<String> hello() {

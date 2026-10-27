@@ -51,10 +51,8 @@ class BookDetailCacheTest {
 
     @BeforeEach
     void setUp() {
-        // 字段注入后由测试装配依赖；自旋间隔 1ms、最多 3 次，缩短测试耗时
-        cache = new BookDetailCache();
-        ReflectionTestUtils.setField(cache, "redisTemplate", redisTemplate);
-        ReflectionTestUtils.setField(cache, "objectMapper", objectMapper);
+        // redis/objectMapper 走构造器注入；自旋间隔 1ms、最多 3 次，缩短测试耗时
+        cache = new BookDetailCache(redisTemplate, objectMapper);
         ReflectionTestUtils.setField(cache, "spinIntervalMs", 1L);
         ReflectionTestUtils.setField(cache, "spinMaxTimes", 3);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);

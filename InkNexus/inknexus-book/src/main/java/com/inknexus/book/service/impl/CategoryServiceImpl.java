@@ -9,7 +9,7 @@ import com.inknexus.book.service.CategoryService;
 import com.inknexus.book.vo.CategoryVO;
 import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
@@ -21,10 +21,10 @@ import java.util.stream.Collectors;
  * （基准 TTL 60 分钟，比 books 更长——分类变化频率低，见 {@code RedisConfig}）。
  */
 @Service
+@RequiredArgsConstructor
 public class CategoryServiceImpl implements CategoryService {
 
-    @Autowired
-    private CategoryMapper categoryMapper;
+    private final CategoryMapper categoryMapper;
 
     /** 查询启用分类，按 sort 升序，结果整体缓存进 category 缓存 */
     @Override

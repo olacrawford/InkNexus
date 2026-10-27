@@ -11,7 +11,7 @@ import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.result.PageResult;
 import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,12 +25,11 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/books")
+@RequiredArgsConstructor
 public class BookController {
 
-    @Autowired
-    private BookService bookService;
-    @Autowired
-    private CategoryService categoryService;
+    private final BookService bookService;
+    private final CategoryService categoryService;
 
 
     @GetMapping("/hello")

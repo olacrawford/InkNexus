@@ -4,9 +4,9 @@ import com.inknexus.common.mq.InkNexusRabbitMq;
 import com.inknexus.common.mq.PaySuccessMessage;
 import com.inknexus.order.service.OrderService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,12 +15,11 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class PaySuccessConsumer {
 
-    @Autowired
-    private ObjectMapper objectMapper;
-    @Autowired
-    private OrderService orderService;
+    private final ObjectMapper objectMapper;
+    private final OrderService orderService;
 
     /**
      * 消费支付成功消息，推进订单状态 0→1 并触发库存确认。

@@ -3,8 +3,8 @@ package com.inknexus.book.support;
 import com.inknexus.book.vo.BookDetailVO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
@@ -22,6 +22,7 @@ import java.util.function.Supplier;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class BookDetailCache {
 
     /** 详情数据键前缀，完整键为 cache:book:detail:{id} */
@@ -50,10 +51,8 @@ public class BookDetailCache {
             "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
             Long.class);
 
-    @Autowired
-    private StringRedisTemplate redisTemplate;
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
     private final Random random = new Random();
     /** 自旋参数默认值，包内可见仅供单元测试缩短等待 */
     private long spinIntervalMs = SPIN_INTERVAL_MS;

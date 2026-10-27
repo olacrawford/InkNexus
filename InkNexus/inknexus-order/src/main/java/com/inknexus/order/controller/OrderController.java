@@ -8,7 +8,7 @@ import com.inknexus.order.service.OrderService;
 import com.inknexus.order.vo.OrderDetailVO;
 import com.inknexus.order.vo.OrderVO;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,10 +19,10 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/orders")
+@RequiredArgsConstructor
 public class OrderController {
 
-    @Autowired
-    private OrderService orderService;
+    private final OrderService orderService;
 
     @GetMapping("/hello")
     public Result<String> hello() {

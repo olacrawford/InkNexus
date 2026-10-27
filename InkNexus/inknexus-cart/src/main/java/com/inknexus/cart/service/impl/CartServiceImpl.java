@@ -12,7 +12,7 @@ import com.inknexus.cart.vo.CartItemVO;
 import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.Result;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,12 +31,11 @@ import java.util.List;
  * </ul>
  */
 @Service
+@RequiredArgsConstructor
 public class CartServiceImpl implements CartService {
 
-    @Autowired
-    private CartItemMapper cartItemMapper;
-    @Autowired
-    private BookClient bookClient;
+    private final CartItemMapper cartItemMapper;
+    private final BookClient bookClient;
 
     /**
      * 查询当前用户全部购物车条目，最近更新的在前

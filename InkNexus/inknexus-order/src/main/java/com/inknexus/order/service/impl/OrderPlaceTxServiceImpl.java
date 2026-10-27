@@ -9,9 +9,9 @@ import com.inknexus.order.client.dto.StockOperationRequest;
 import com.inknexus.order.entity.Order;
 import com.inknexus.order.mq.OrderEventPublisher;
 import com.inknexus.order.service.OrderPlaceTxService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.seata.spring.annotation.GlobalTransactional;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,12 +29,11 @@ import java.util.function.Supplier;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class OrderPlaceTxServiceImpl implements OrderPlaceTxService {
 
-    @Autowired
-    private StockClient stockClient;
-    @Autowired
-    private OrderEventPublisher orderEventPublisher;
+    private final StockClient stockClient;
+    private final OrderEventPublisher orderEventPublisher;
 
     @Override
     @GlobalTransactional(rollbackFor = Exception.class)

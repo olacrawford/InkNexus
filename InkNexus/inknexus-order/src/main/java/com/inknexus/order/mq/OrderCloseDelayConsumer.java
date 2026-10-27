@@ -4,9 +4,9 @@ import com.inknexus.common.mq.InkNexusRabbitMq;
 import com.inknexus.common.mq.OrderCloseDelayMessage;
 import com.inknexus.order.service.OrderService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,12 +15,11 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class OrderCloseDelayConsumer {
 
-    @Autowired
-    private ObjectMapper objectMapper;
-    @Autowired
-    private OrderService orderService;
+    private final ObjectMapper objectMapper;
+    private final OrderService orderService;
 
     /**
      * 消费到期关单消息；返回 false（已支付/已取消/未到期）只记日志不重试——条件更新天然幂等，

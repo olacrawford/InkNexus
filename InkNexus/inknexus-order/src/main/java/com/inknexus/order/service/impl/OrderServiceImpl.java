@@ -21,8 +21,8 @@ import com.inknexus.order.service.OrderPlaceTxService;
 import com.inknexus.order.service.OrderService;
 import com.inknexus.order.vo.OrderDetailVO;
 import com.inknexus.order.vo.OrderVO;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -48,20 +48,15 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
 
-    @Autowired
-    private OrderMapper orderMapper;
-    @Autowired
-    private OrderItemMapper orderItemMapper;
-    @Autowired
-    private BookClient bookClient;
-    @Autowired
-    private CartClient cartClient;
-    @Autowired
-    private OrderPlaceTxService orderPlaceTxService;
-    @Autowired
-    private OrderEventPublisher orderEventPublisher;
+    private final OrderMapper orderMapper;
+    private final OrderItemMapper orderItemMapper;
+    private final BookClient bookClient;
+    private final CartClient cartClient;
+    private final OrderPlaceTxService orderPlaceTxService;
+    private final OrderEventPublisher orderEventPublisher;
 
     /** 订单超时关单时长（分钟），来自 Nacos 配置 */
     @Value("${inknexus.order.expire-minutes:30}")

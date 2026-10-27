@@ -15,7 +15,7 @@ import com.inknexus.book.vo.BookVO;
 import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.result.PageResult;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -30,12 +30,11 @@ import java.util.stream.Collectors;
  * 由 @CacheEvict(allEntries) 清列表/分页并精确驱逐详情缓存，残余不一致靠短 TTL 兜底。
  */
 @Service
+@RequiredArgsConstructor
 public class BookServiceImpl implements BookService {
 
-    @Autowired
-    private BookMapper bookMapper;
-    @Autowired
-    private BookDetailCache detailCache;
+    private final BookMapper bookMapper;
+    private final BookDetailCache detailCache;
 
     /**
      * 查询所有上架图书；无参方法缓存 key 为 SimpleKey.EMPTY，与 pageBooks 的参数 key 互不覆盖

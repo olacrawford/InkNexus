@@ -38,10 +38,8 @@ class OrderStockConsumerTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        // 字段注入后由测试自行装配依赖
-        consumer = new OrderStockConsumer();
-        ReflectionTestUtils.setField(consumer, "objectMapper", objectMapper);
-        ReflectionTestUtils.setField(consumer, "stockService", stockService);
+        // bean 依赖走构造器注入，由测试直接传入
+        consumer = new OrderStockConsumer(objectMapper, stockService);
     }
 
     @Test

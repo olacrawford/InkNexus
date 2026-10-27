@@ -5,8 +5,8 @@ import com.inknexus.ai.dto.ChatResponse;
 import com.inknexus.ai.service.ChatService;
 import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,10 +23,10 @@ import java.util.UUID;
 @Slf4j
 @RestController
 @RequestMapping("/ai")
+@RequiredArgsConstructor
 public class AiAssistantController {
 
-    @Autowired
-    private ChatService chatService;
+    private final ChatService chatService;
 
     @GetMapping("/hello")
     public Result<String> hello() {

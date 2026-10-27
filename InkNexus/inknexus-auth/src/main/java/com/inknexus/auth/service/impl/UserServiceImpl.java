@@ -11,7 +11,7 @@ import com.inknexus.auth.vo.UserVO;
 import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
 import com.inknexus.common.util.JwtUtil;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,10 +26,10 @@ import java.time.LocalDateTime;
  * 网关侧配置同一密钥才能验签。
  */
 @Service
+@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
-    @Autowired
-    private UserMapper userMapper;
+    private final UserMapper userMapper;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Value("${jwt.secret}")

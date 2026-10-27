@@ -5,7 +5,7 @@ import com.inknexus.auth.service.AddressService;
 import com.inknexus.auth.vo.AddressVO;
 import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,10 +26,10 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/auth/addresses")
+@RequiredArgsConstructor
 public class AddressController {
 
-    @Autowired
-    private AddressService addressService;
+    private final AddressService addressService;
 
     /**
      * 查询当前用户地址，默认地址在前，其余按更新时间倒序

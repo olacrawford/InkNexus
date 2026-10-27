@@ -6,7 +6,7 @@ import com.inknexus.cart.service.CartService;
 import com.inknexus.cart.vo.CartItemVO;
 import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,10 +26,10 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/cart")
+@RequiredArgsConstructor
 public class CartController {
 
-    @Autowired
-    private CartService cartService;
+    private final CartService cartService;
 
     @GetMapping("/hello")
     // 网关将 /hello 结尾的路径视为公开接口，无需 JWT

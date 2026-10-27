@@ -4,7 +4,7 @@ import com.inknexus.ai.dto.ChatResponse;
 import com.inknexus.ai.service.ChatService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
@@ -17,10 +17,10 @@ import java.util.Map;
  * 2. 用户身份：toolContext 携带 userId，工具执行时从中取值，流式/异步线程下不依赖 ThreadLocal。
  */
 @Service
+@RequiredArgsConstructor
 public class ChatServiceImpl implements ChatService {
 
-    @Autowired
-    private ChatClient chatClient;
+    private final ChatClient chatClient;
 
     @Override
     public ChatResponse chat(Long userId, String conversationId, String message) {

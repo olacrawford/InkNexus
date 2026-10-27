@@ -5,9 +5,9 @@ import com.inknexus.ai.feign.dto.BookSnapshot;
 import com.inknexus.ai.feign.dto.CategorySnapshot;
 import com.inknexus.ai.support.ResultUtils;
 import com.inknexus.common.result.PageResult;
+import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -20,10 +20,10 @@ import java.util.List;
  * 交给 ToolExecutionExceptionProcessor 转成模型可读的失败说明。
  */
 @Component
+@RequiredArgsConstructor
 public class QueryBookTool {
 
-    @Autowired
-    private BookFeignClient bookFeignClient;
+    private final BookFeignClient bookFeignClient;
 
     @Tool(description = "按书名关键字搜索图书，返回图书摘要列表（书名/作者/价格）")
     public List<BookBrief> searchBooks(@ToolParam(description = "搜索关键词：书名或作者名") String keyword,

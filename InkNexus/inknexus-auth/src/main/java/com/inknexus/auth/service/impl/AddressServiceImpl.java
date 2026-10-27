@@ -9,7 +9,7 @@ import com.inknexus.auth.service.AddressService;
 import com.inknexus.auth.vo.AddressVO;
 import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,10 +23,10 @@ import java.util.List;
  * <p>默认地址的唯一性靠"先清空再置位/补位"的多步写保证，这些写操作都在同一事务内完成。
  */
 @Service
+@RequiredArgsConstructor
 public class AddressServiceImpl implements AddressService {
 
-    @Autowired
-    private UserAddressMapper addressMapper;
+    private final UserAddressMapper addressMapper;
 
     /**
      * 查询用户全部地址，默认地址优先，其次按更新时间倒序

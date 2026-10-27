@@ -6,9 +6,9 @@ import com.inknexus.common.mq.OrderStockEvent;
 import com.inknexus.common.mq.StockItemMessage;
 import com.inknexus.order.client.dto.StockOperationItem;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,12 +18,11 @@ import java.util.List;
  * 发布时携带 CorrelationData（eventId），publisher confirm 失败的日志能对应到具体订单。
  */
 @Component
+@RequiredArgsConstructor
 public class OrderEventPublisher {
 
-    @Autowired
-    private RabbitTemplate rabbitTemplate;
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final RabbitTemplate rabbitTemplate;
+    private final ObjectMapper objectMapper;
 
     /**
      * 发布库存确认事件（订单已支付）：由 markPaid 在 0→1 迁移后的事务内调用；

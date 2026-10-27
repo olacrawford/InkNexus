@@ -30,10 +30,8 @@ class OrderCloseDelayConsumerTest {
 
     @BeforeEach
     void setUp() {
-        // 字段注入后由测试自行装配依赖
-        consumer = new OrderCloseDelayConsumer();
-        ReflectionTestUtils.setField(consumer, "objectMapper", objectMapper);
-        ReflectionTestUtils.setField(consumer, "orderService", orderService);
+        // bean 依赖走构造器注入，由测试直接传入
+        consumer = new OrderCloseDelayConsumer(objectMapper, orderService);
     }
 
     @Test

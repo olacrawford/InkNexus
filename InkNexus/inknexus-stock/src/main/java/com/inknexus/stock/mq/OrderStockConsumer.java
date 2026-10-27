@@ -5,9 +5,9 @@ import com.inknexus.common.mq.OrderStockEvent;
 import com.inknexus.stock.dto.StockOperationItem;
 import com.inknexus.stock.service.StockService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,12 +18,11 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class OrderStockConsumer {
 
-    @Autowired
-    private ObjectMapper objectMapper;
-    @Autowired
-    private StockService stockService;
+    private final ObjectMapper objectMapper;
+    private final StockService stockService;
 
     /**
      * 消费订单支付确认（ORDER_PAID → confirm）与库存释放（ORDER_RELEASE → release）事件。

@@ -9,7 +9,7 @@ import com.inknexus.ai.support.ResultUtils;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -28,10 +28,10 @@ import java.util.function.Function;
  * 由 ToolExecutionExceptionProcessor 统一转成模型可读的失败说明继续对话。
  */
 @Component
+@RequiredArgsConstructor
 public class QueryOrderTool {
 
-    @Autowired
-    private OrderFeignClient orderFeignClient;
+    private final OrderFeignClient orderFeignClient;
 
     /** 查当前用户最近订单列表。 */
     @Tool(description = "查询当前登录用户的最近订单列表（订单号/金额/状态/下单时间）")

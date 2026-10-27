@@ -3,9 +3,9 @@ package com.inknexus.payment.mq;
 import com.inknexus.common.mq.InkNexusRabbitMq;
 import com.inknexus.common.mq.PaySuccessMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,12 +13,11 @@ import org.springframework.stereotype.Component;
  * 发布时携带 CorrelationData（eventId），publisher confirm 失败的日志能对应到具体订单。
  */
 @Component
+@RequiredArgsConstructor
 public class PaySuccessPublisher {
 
-    @Autowired
-    private RabbitTemplate rabbitTemplate;
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final RabbitTemplate rabbitTemplate;
+    private final ObjectMapper objectMapper;
 
     /**
      * 发布支付成功事件到 pay.success 交换机，订单服务消费后把订单置为已支付并触发库存确认。

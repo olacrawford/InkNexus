@@ -40,9 +40,8 @@ class UserServiceImplTest {
     @BeforeEach
     void setUp() {
         jwtUtil = new JwtUtil(SECRET, 3600);
-        userService = new UserServiceImpl();
-        // 字段注入后由测试自行装配依赖与配置值，再触发 JwtUtil 构建
-        ReflectionTestUtils.setField(userService, "userMapper", userMapper);
+        // mapper 走构造器注入，@Value 配置值仍由测试自行装配，再触发 JwtUtil 构建
+        userService = new UserServiceImpl(userMapper);
         ReflectionTestUtils.setField(userService, "secret", SECRET);
         ReflectionTestUtils.setField(userService, "expireSeconds", 3600L);
         userService.initJwt();
