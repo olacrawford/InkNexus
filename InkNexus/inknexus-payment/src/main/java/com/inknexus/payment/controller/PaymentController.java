@@ -1,5 +1,6 @@
 package com.inknexus.payment.controller;
 
+import com.inknexus.common.context.UserContext;
 import com.inknexus.common.result.Result;
 import com.inknexus.payment.dto.PaymentRequest;
 import com.inknexus.payment.service.PaymentService;
@@ -10,7 +11,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,9 +35,9 @@ public class PaymentController {
      * @throws com.inknexus.common.exception.BusinessException 404 订单/支付单不存在；403 非本人订单；400 订单状态或时效不允许支付
      */
     @PostMapping("/pay")
-    public Result<PaymentVO> pay(@RequestHeader("X-User-Id") Long userId,
-                                 @Valid @RequestBody PaymentRequest request) {
-        // userId 由网关解析 JWT 后写入请求头，不信任前端传参
+    public Result<PaymentVO> pay(@Valid @RequestBody PaymentRequest request) {
+        // 身份来自网关注入的头（经 UserContext 恢复），不信任前端传参
+        Long userId = UserContext.requireUserId();
         return Result.success(paymentService.pay(userId, request));
     }
 
@@ -46,8 +46,8 @@ public class PaymentController {
      * @throws com.inknexus.common.exception.BusinessException 404 支付单不存在
      */
     @GetMapping("/order/{orderId}")
-    public Result<PaymentVO> getByOrderId(@RequestHeader("X-User-Id") Long userId,
-                                          @PathVariable Long orderId) {
+    public Result<PaymentVO> getByOrderId(@PathVariable Long orderId) {
+        Long userId = UserContext.requireUserId();
         return Result.success(paymentService.getByOrderId(userId, orderId));
     }
 }

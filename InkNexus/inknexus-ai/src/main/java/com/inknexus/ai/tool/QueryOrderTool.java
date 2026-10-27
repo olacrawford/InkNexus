@@ -1,11 +1,11 @@
 package com.inknexus.ai.tool;
 
-import com.inknexus.ai.context.UserContextHolder;
 import com.inknexus.ai.feign.OrderFeignClient;
 import com.inknexus.ai.feign.dto.OrderDetailSnapshot;
 import com.inknexus.ai.feign.dto.OrderItemSnapshot;
 import com.inknexus.ai.feign.dto.OrderSnapshot;
 import com.inknexus.ai.support.ResultUtils;
+import com.inknexus.common.context.UserContext;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -75,16 +75,16 @@ public class QueryOrderTool {
     }
 
     /**
-     * 从 toolContext 取出当前用户 ID，写入 ThreadLocal 后执行查询（Feign 拦截器据此注入 X-User-Id），
-     * 执行完无论成败都清理，防止线程池复用串号。
+     * 从 toolContext 取出当前用户 ID，写入 common 的 UserContext 后执行查询
+     * （Feign 拦截器据此注入 X-User-Id），执行完无论成败都清理，防止线程池复用串号。
      */
     private <T> T withCurrentUser(ToolContext toolContext, Function<Long, T> query) {
         Long userId = requireCurrentUser(toolContext);
-        UserContextHolder.setUserId(userId);
+        UserContext.setUserId(userId);
         try {
             return query.apply(userId);
         } finally {
-            UserContextHolder.clear();
+            UserContext.clear();
         }
     }
 

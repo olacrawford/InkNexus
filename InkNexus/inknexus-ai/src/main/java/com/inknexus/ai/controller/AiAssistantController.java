@@ -3,6 +3,7 @@ package com.inknexus.ai.controller;
 import com.inknexus.ai.dto.ChatRequest;
 import com.inknexus.ai.dto.ChatResponse;
 import com.inknexus.ai.service.ChatService;
+import com.inknexus.common.context.UserContext;
 import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -12,7 +13,6 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
@@ -35,8 +35,9 @@ public class AiAssistantController {
 
     /** AI 对话入口（同步返回完整回复，作为流式接口的降级备选）。 */
     @PostMapping("/chat")
-    public Result<ChatResponse> chat(@RequestHeader("X-User-Id") Long userId,
-                                     @Valid @RequestBody ChatRequest request) {
+    public Result<ChatResponse> chat(@Valid @RequestBody ChatRequest request) {
+        // 控制器方法体在请求线程执行，可安全读 ThreadLocal；userId 显式传给响应式链路
+        Long userId = UserContext.requireUserId();
         String conversationId = resolveConversationId(request);
         return Result.success(chatService.chat(userId, conversationId, request.getMessage()));
     }
@@ -48,8 +49,9 @@ public class AiAssistantController {
      * 需用 fetch + ReadableStream 解析。
      */
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<String>> chatStream(@RequestHeader("X-User-Id") Long userId,
-                                                    @Valid @RequestBody ChatRequest request) {
+    public Flux<ServerSentEvent<String>> chatStream(@Valid @RequestBody ChatRequest request) {
+        // 流式链路在回调线程执行，ThreadLocal 不可见：此处取出 userId 后全程显式传参/经 toolContext 传递
+        Long userId = UserContext.requireUserId();
         String conversationId = resolveConversationId(request);
         Flux<ServerSentEvent<String>> meta = Flux.just(sse("meta", conversationId));
         Flux<ServerSentEvent<String>> deltas = chatService

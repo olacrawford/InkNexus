@@ -4,6 +4,7 @@ import com.inknexus.cart.dto.CartItemCreateRequest;
 import com.inknexus.cart.dto.CartItemUpdateRequest;
 import com.inknexus.cart.service.CartService;
 import com.inknexus.cart.vo.CartItemVO;
+import com.inknexus.common.context.UserContext;
 import com.inknexus.common.result.Result;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +14,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,7 +41,8 @@ public class CartController {
      * 查询当前用户全部购物车条目，最近更新的在前
      */
     @GetMapping
-    public Result<List<CartItemVO>> list(@RequestHeader("X-User-Id") Long userId) {
+    public Result<List<CartItemVO>> list() {
+        Long userId = UserContext.requireUserId();
         return Result.success(cartService.list(userId));
     }
 
@@ -49,7 +50,8 @@ public class CartController {
      * 查询当前用户已勾选条目；订单服务通过 Feign 调用此接口取结算商品
      */
     @GetMapping("/selected")
-    public Result<List<CartItemVO>> selected(@RequestHeader("X-User-Id") Long userId) {
+    public Result<List<CartItemVO>> selected() {
+        Long userId = UserContext.requireUserId();
         return Result.success(cartService.selected(userId));
     }
 
@@ -58,8 +60,8 @@ public class CartController {
      * @throws com.inknexus.common.exception.BusinessException 400 图书不存在或已下架
      */
     @PostMapping
-    public Result<CartItemVO> add(@RequestHeader("X-User-Id") Long userId,
-                                  @Valid @RequestBody CartItemCreateRequest request) {
+    public Result<CartItemVO> add(@Valid @RequestBody CartItemCreateRequest request) {
+        Long userId = UserContext.requireUserId();
         return Result.success(cartService.add(userId, request));
     }
 
@@ -68,9 +70,9 @@ public class CartController {
      * @throws com.inknexus.common.exception.BusinessException 404 条目不存在或不属于当前用户
      */
     @PutMapping("/{id}")
-    public Result<CartItemVO> update(@RequestHeader("X-User-Id") Long userId,
-                                     @PathVariable Long id,
+    public Result<CartItemVO> update(@PathVariable Long id,
                                      @Valid @RequestBody CartItemUpdateRequest request) {
+        Long userId = UserContext.requireUserId();
         return Result.success(cartService.update(userId, id, request));
     }
 
@@ -78,8 +80,8 @@ public class CartController {
      * 删除单条购物车条目；非本人条目按不存在处理
      */
     @DeleteMapping("/{id}")
-    public Result<Void> delete(@RequestHeader("X-User-Id") Long userId,
-                               @PathVariable Long id) {
+    public Result<Void> delete(@PathVariable Long id) {
+        Long userId = UserContext.requireUserId();
         cartService.delete(userId, id);
         return Result.success();
     }
@@ -88,7 +90,8 @@ public class CartController {
      * 清空当前用户购物车
      */
     @DeleteMapping
-    public Result<Void> clear(@RequestHeader("X-User-Id") Long userId) {
+    public Result<Void> clear() {
+        Long userId = UserContext.requireUserId();
         cartService.clear(userId);
         return Result.success();
     }

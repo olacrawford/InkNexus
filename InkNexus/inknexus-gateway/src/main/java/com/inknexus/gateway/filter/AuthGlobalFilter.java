@@ -1,5 +1,6 @@
 package com.inknexus.gateway.filter;
 
+import com.inknexus.common.context.UserContext;
 import com.inknexus.common.util.JwtUtil;
 import io.jsonwebtoken.Claims;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,7 +22,8 @@ import java.util.List;
  * 网关全局鉴权过滤器：请求转发到下游前统一校验 JWT，把解析出的用户身份
  * 写入 X-User-Id / X-User-Role 透传给下游服务。
  * 信任边界：下游不解析 JWT，只认网关注入的这两个头（管理接口的 ADMIN 判权依赖
- * token 的 role claim），因此必须覆盖式重写，客户端伪造的同名头不能透传；
+ * token 的 role claim）。所有转发路径（含公开白名单）都会先剥离客户端伪造的身份头，
+ * 受保护路径验签通过后再覆盖式写入可信值——下游看到的身份头只能来自这里；
  * 白名单（isPublic）之外一律 fail-closed：无 token、格式不对或解析失败都返回 401。
  * 另对仅供服务间 Feign 直连的内部端点做外部封禁（INTERNAL_ONLY_PATHS）。
  */
@@ -49,13 +51,21 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             return forbidden(exchange);
         }
 
+        //转发前统一剥离身份头：公开路径虽不鉴权，客户端伪造的 X-User-Id / X-User-Role 也不能透传给下游
+        ServerWebExchange sanitized = exchange.mutate().request(exchange.getRequest().mutate()
+                .headers(headers -> {
+                    headers.remove(UserContext.USER_ID_HEADER);
+                    headers.remove(UserContext.USER_ROLE_HEADER);
+                })
+                .build()).build();
+
         if (isPublic(exchange)) {
-            return chain.filter(exchange);
+            return chain.filter(sanitized);
         }
 
-        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        String authHeader = sanitized.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return unauthorized(exchange, "缺少登录凭证");
+            return unauthorized(sanitized, "缺少登录凭证");
         }
 
         try {
@@ -64,16 +74,16 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             String userId = claims.getSubject();
             String role = claims.get(JwtUtil.CLAIM_ROLE, String.class);
 
-            //覆盖式写入身份头：header() 是 put 语义（整体覆盖），客户端伪造的 X-User-Id / X-User-Role 都会被替换；
+            //覆盖式写入身份头：header() 是 put 语义（整体覆盖），下游看到的身份只能来自这里验过的 token；
             //旧签发的 token 不带 role claim，统一按 DEFAULT_ROLE 透传，管理接口对存量 token 默认关闭（fail-closed）
-            ServerHttpRequest mutated = exchange.getRequest().mutate()
-                    .header("X-User-Id", userId)
-                    .header("X-User-Role", role == null ? JwtUtil.DEFAULT_ROLE : role)
+            ServerHttpRequest mutated = sanitized.getRequest().mutate()
+                    .header(UserContext.USER_ID_HEADER, userId)
+                    .header(UserContext.USER_ROLE_HEADER, role == null ? JwtUtil.DEFAULT_ROLE : role)
                     .build();
 
-            return chain.filter(exchange.mutate().request(mutated).build());
+            return chain.filter(sanitized.mutate().request(mutated).build());
         } catch (Exception e) {
-            return unauthorized(exchange, "登录凭证无效或已过期");
+            return unauthorized(sanitized, "登录凭证无效或已过期");
         }
     }
 

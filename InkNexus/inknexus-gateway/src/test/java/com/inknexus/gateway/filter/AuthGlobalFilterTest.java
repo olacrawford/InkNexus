@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -92,6 +93,25 @@ class AuthGlobalFilterTest {
         filter.filter(exchange, chain).block();
 
         verify(chain).filter(any());
+    }
+
+    @Test
+    void filter_stripsForgedIdentityHeaders_onPublicPath() {
+        // 公开路径不鉴权，但客户端伪造的身份头同样不能透传给下游
+        ServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/books")
+                        .header("X-User-Id", "999")
+                        .header("X-User-Role", "ADMIN")
+                        .build());
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        ArgumentCaptor<ServerWebExchange> captor = ArgumentCaptor.forClass(ServerWebExchange.class);
+        verify(chain).filter(captor.capture());
+        HttpHeaders downstream = captor.getValue().getRequest().getHeaders();
+        assertNull(downstream.getFirst("X-User-Id"));
+        assertNull(downstream.getFirst("X-User-Role"));
     }
 
     @Test
