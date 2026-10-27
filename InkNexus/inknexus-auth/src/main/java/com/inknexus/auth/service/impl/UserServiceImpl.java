@@ -6,11 +6,11 @@ import com.inknexus.auth.dto.RegisterRequest;
 import com.inknexus.auth.entity.User;
 import com.inknexus.auth.mapper.UserMapper;
 import com.inknexus.auth.service.UserService;
-import com.inknexus.auth.util.JwtUtil;
 import com.inknexus.auth.vo.LoginResponse;
 import com.inknexus.auth.vo.UserVO;
 import com.inknexus.common.constant.ErrorCode;
 import com.inknexus.common.exception.BusinessException;
+import com.inknexus.common.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -91,7 +91,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "密码错误");
         }
 
-        String token = jwtUtil.generateToken(user);
+        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getNickname(), user.getRole());
         return new LoginResponse(token, user);
     }
 }

@@ -1,8 +1,7 @@
 package com.inknexus.gateway.filter;
 
+import com.inknexus.common.util.JwtUtil;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -15,7 +14,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -36,10 +34,10 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
      */
     private static final List<String> INTERNAL_ONLY_PATHS = List.of("/api/stock/deduct");
 
-    private final SecretKey secretKey;
+    private final JwtUtil jwtUtil;
 
     public AuthGlobalFilter(@Value("${jwt.secret}") String secret) {
-        this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.jwtUtil = new JwtUtil(secret);
     }
 
     /**
@@ -61,20 +59,16 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         }
 
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(secretKey)
-                    .build()
-                    .parseClaimsJws(authHeader.substring(7))
-                    .getBody();
+            Claims claims = jwtUtil.parseToken(authHeader.substring(7));
 
             String userId = claims.getSubject();
-            String role = claims.get("role", String.class);
+            String role = claims.get(JwtUtil.CLAIM_ROLE, String.class);
 
             //覆盖式写入身份头：header() 是 put 语义（整体覆盖），客户端伪造的 X-User-Id / X-User-Role 都会被替换；
-            //旧签发的 token 不带 role claim，统一按 USER 透传，管理接口对存量 token 默认关闭（fail-closed）
+            //旧签发的 token 不带 role claim，统一按 DEFAULT_ROLE 透传，管理接口对存量 token 默认关闭（fail-closed）
             ServerHttpRequest mutated = exchange.getRequest().mutate()
                     .header("X-User-Id", userId)
-                    .header("X-User-Role", role == null ? "USER" : role)
+                    .header("X-User-Role", role == null ? JwtUtil.DEFAULT_ROLE : role)
                     .build();
 
             return chain.filter(exchange.mutate().request(mutated).build());
@@ -84,6 +78,7 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isInternalOnly(String path) {
+
         return INTERNAL_ONLY_PATHS.contains(path);
     }
 
